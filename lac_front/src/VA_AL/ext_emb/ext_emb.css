@@ -1,0 +1,13 @@
+.row input {
+    padding: 0.2rem 0 0.2rem 0.5rem;
+    background-color: unset;
+    color: white;
+}
+
+.row input:focus {
+    padding: 0.2rem 0 0.2rem 0.5rem;
+    background-color: unset;
+    color: white;
+    border-color: #F78F26;
+    box-shadow: none;
+}

@@ -8,6 +8,10 @@ import { Footer, Page } from "./Page/Page.js";
 // Pages
 import { VA_AL } from "./VA_AL/VA_AL.js";
 import { VA_API } from "./VA_API/VA_API.js";
+import { ExtractEmbeddings } from "./VA_AL/ext_emb/ext_emb.js";
+import { AlignVideos } from "./VA_AL/align_vid/align_vid.js";
+import { FrameRetrieval } from "./VA_AL/frame_retr/frame_retr.js";
+import { AnomalyDetection } from "./VA_AL/anomaly_det/anomaly_det.js";
 import About from "./About/About.js";
 
 function TestPage() {
@@ -24,8 +28,15 @@ function App() {
             <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="test" element={<Page PageComponent={TestPage}/>} />
+                {/* 1 */}
                 <Route path="va-api" element={<Page PageComponent={VA_API} />} />
-                <Route path="va-analysis" element={<VA_AL/>}/>
+                {/* 2 */}
+                <Route path="va-analysis" element={<Page PageComponent={VA_AL} />} />
+                <Route path="va-analysis/ext-emb" element={<Page PageComponent={ExtractEmbeddings}/>} />
+                <Route path="va-analysis/align-vid" element={<Page PageComponent={AlignVideos} />} />
+                <Route path="va-analysis/frame-retr" element={<Page PageComponent={FrameRetrieval} />} />
+                <Route path="va-analysis/anomaly-det" element={<Page PageComponent={AnomalyDetection} />} />
+
                 <Route path="about" element={<Page PageComponent={About} />} />
             </Routes>
         </Router>
