@@ -13,6 +13,9 @@ function ExtractEmbeddings() {
     const [videos, setVideos] = React.useState([]);
     const [savedDir, setSavedDir] = React.useState('./train-results');
     const [selectedDataset, setSelectedDataset] = React.useState('');
+    const [folders, setFolders] = React.useState([]);
+    const [selectedFolder, setSelectedFolder] = React.useState('');
+    const [emb_checked, setEmbChecked] = React.useState({});
     React.useEffect(() => {
         fetch('http://localhost:5001/list_datasets')
             .then(response => response.json())
@@ -56,7 +59,78 @@ function ExtractEmbeddings() {
     }, [selectedDataset]);
 
     function extract_embeddings() {
+        try {
+            fetch('http://localhost:5001/extract_embeddings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    'config': savedDir + '/' + selectedFolder + '/config.json',
+                    'directory': savedDir + '/' + selectedFolder
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message === 'success') {
+                        console.log('Extracted embeddings:', data);
+                    } else {
+                        console.error('Failed to extract embeddings:', data.error);
+                    }
+                })
+                .catch(error => console.error('Error fetching embeddings:', error));
+        } catch (error) {
+            console.error('Error fetching data:', error);
+        }
+    }
 
+    function check_embeddings() {
+        try {
+            fetch('http://localhost:5001/check_embeddings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    'videos': videos,
+                    'directory': savedDir + '/' + selectedFolder
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message === 'success') {
+                        setEmbChecked(data.embeddings);
+                    } else {
+                        console.error('Failed to check embeddings:', data.error);
+                    }
+                })
+                .catch(error => console.error('Error fetching embeddings:', error));
+        } catch (error) {
+            console.error('Error fetching data:', error);
+        }
+    }
+
+    function getFolderList() {
+        try {
+            fetch('http://localhost:5001/list_folders', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ directory: savedDir })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message === 'success') {
+                        setFolders(data.folders_with_config);
+                    } else {
+                        console.error('Failed to fetch folders:', data.error);
+                    }
+                })
+                .catch(error => console.error('Error fetching folders:', error));
+        } catch (error) {
+            console.error('Error fetching data:', error);
+        }
     }
 
     return (
@@ -86,7 +160,7 @@ function ExtractEmbeddings() {
                     </div>
                     <div className="row mt-3">
                         <div className="col-md-4">
-                            <label>Working & Saved Directory</label>
+                            <label>Working Directory</label>
                         </div>
                         <div className="col-md-8">
                             <input 
@@ -95,14 +169,50 @@ function ExtractEmbeddings() {
                                 onChange={(e) => setSavedDir(e.target.value)}
                                 className="form-control"
                             />
+
+                            <div className="d-flex justify-content-between">
+                                <button 
+                                    className="btn btn-secondary mt-3 ms-auto"
+                                    onClick={getFolderList}
+                                >Get Directory</button>
+                            </div>
+
+                            <select 
+                            value={selectedFolder}
+                            onChange={e => {
+                                setSelectedFolder(e.target.value);
+                            }}
+                            disabled={folders.length === 0}
+                            data-bs-toggle="tooltip" data-bs-placement="top" 
+                            title="Select folder to extract embeddings"
+                            className="form-select mt-3">
+                                <option value="">Select Folder</option>
+                                {folders.map((folder, index) => (
+                                    <option key={index} value={folder}>{folder}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 
-                    <div className="d-flex justify-content-between my-3">
-                        <button 
-                            className="btn btn-primary flex-grow-1"
+                    <div className="row w-100 my-3">
+                        <div className="col-md-6">
+                            <button 
+                            className="btn btn-primary flex-grow-1 w-100"
                             onClick={extract_embeddings}
+                            disabled={!selectedFolder}
+                            data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="Extract embeddings from selected folder"
                         >Extract embeddings</button>
+                        </div>
+                        <div className="col-md-6">
+                            <button 
+                            className="btn btn-secondary w-100"
+                            disabled={!selectedFolder || !selectedDataset}
+                            data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="Check embeddings for selected videos"
+                            onClick={check_embeddings}
+                            >Check Embedding</button>
+                        </div>
                     </div>
 
                 </div>
@@ -114,6 +224,9 @@ function ExtractEmbeddings() {
                                 <div className="row">
                                     <div className="col-md-8">
                                         {video}
+                                    </div>
+                                    <div className="col-md-4 text-end">
+                                        {emb_checked[video] ? '✅' : '❌'}
                                     </div>
                                 </div>
                             </li>
