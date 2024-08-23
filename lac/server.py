@@ -1,5 +1,5 @@
 import json
-from flask import Flask, Response, request, jsonify, stream_with_context
+from flask import Flask, Response, request, jsonify, stream_with_context, send_from_directory
 from flask_cors import CORS
 import subprocess
 import os
@@ -145,7 +145,6 @@ def extract_embeddings():
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
 
-# check embeddings exist or not from input videos.
 @app.route('/check_embeddings', methods=['POST'])
 def check_embeddings():
     try:
@@ -178,6 +177,40 @@ def list_folders():
             if os.path.exists(config_file):
                 folders_with_config.append(folder)
         return jsonify({'message': 'success', 'folders': folders, 'folders_with_config': folders_with_config})
+    except Exception as e:
+        return jsonify({'message': 'error', 'error': str(e)})
+    
+@app.route('/get_video', methods=['POST'])
+def get_video():
+    try:
+        data = request.get_json()
+        data_dir = '/home/cix-desktop-2/Documents/k/datasets/pouring/videos/'
+
+        logger.info(f"[POST /get_video] Request received with data: {data}")
+        dataset = data['dataset']
+        video = data['video']
+        video_path = f'../datasets/{dataset}/videos/{video}'
+        # send from directory
+        return send_from_directory(data_dir, video)
+        
+    except Exception as e:
+        return jsonify({'message': 'error', 'error': str(e)})
+    
+@app.route('/align_videos', methods=['POST'])
+def align_videos():
+    try:
+        data = request.get_json()
+        logger.info(f"[POST /align_videos] Request received with data: {data}")
+        dataset = data['dataset']
+        video1 = data['video1']
+        video2 = data['video2']
+        directory = data['directory']
+        args = f"--dataset='{dataset}' --video1='{video1}' --video2='{video2}' --directory='{directory}'"
+        
+        command = f"source ~/anaconda3/etc/profile.d/conda.sh && conda activate carl && python server/align.py {args}"
+        subprocess.run(command, shell=True, check=True, executable='/bin/bash')
+        
+        return jsonify({'message': 'success'})
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
 
