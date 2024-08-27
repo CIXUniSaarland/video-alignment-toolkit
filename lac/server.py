@@ -208,9 +208,15 @@ def align_videos():
         args = f"--dataset='{dataset}' --video1='{video1}' --video2='{video2}' --directory='{directory}'"
         
         command = f"source ~/anaconda3/etc/profile.d/conda.sh && conda activate carl && python server/align.py {args}"
-        subprocess.run(command, shell=True, check=True, executable='/bin/bash')
+        result = subprocess.run(command, 
+                       shell=True, 
+                       check=True, 
+                       executable='/bin/bash',
+                       capture_output=True,
+                       text=True)
+        output_json = json.loads(result.stdout)
         
-        return jsonify({'message': 'success'})
+        return jsonify({'message': 'success', 'result': output_json})
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
     

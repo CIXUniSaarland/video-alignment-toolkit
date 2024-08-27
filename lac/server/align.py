@@ -117,3 +117,10 @@ if __name__ == '__main__':
             with open(output_path, 'w') as f:
                 json.dump(data, f)
             logger.success(f"Data saved to {output_path}")
+            
+        data = json.load(open(output_path))
+        print(json.dumps(data))
+        
+
+
+    
