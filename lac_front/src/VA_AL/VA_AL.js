@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './VA_AL.css';
-import { VideoPlayer } from '../Video/Video.js';
+import { VideoPlayer } from '../util/video';
 import { Link } from 'react-router-dom';
 
 function Dropdown2({setVideoSrc, VideoTitle}) {

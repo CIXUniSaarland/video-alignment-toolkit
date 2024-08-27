@@ -8,6 +8,7 @@ import { Footer, Page } from "./Page/Page.js";
 // Pages
 import { VA_AL } from "./VA_AL/VA_AL.js";
 import { VA_API } from "./VA_API/VA_API.js";
+import { VA_IT } from "./VA_IT/VA_IT.js";
 import { ExtractEmbeddings } from "./VA_AL/ext_emb/ext_emb.js";
 import { AlignVideos } from "./VA_AL/align_vid/align_vid.js";
 import { FrameRetrieval } from "./VA_AL/frame_retr/frame_retr.js";
@@ -36,6 +37,8 @@ function App() {
                 <Route path="va-analysis/align-vid" element={<Page PageComponent={AlignVideos} />} />
                 <Route path="va-analysis/frame-retr" element={<Page PageComponent={FrameRetrieval} />} />
                 <Route path="va-analysis/anomaly-det" element={<Page PageComponent={AnomalyDetection} />} />
+                {/* 3 */}
+                <Route path="va-instruction" element={<Page PageComponent={VA_IT} />} />
 
                 <Route path="about" element={<Page PageComponent={About} />} />
             </Routes>
@@ -95,72 +98,6 @@ function Home() {
             </div>
 
             <Footer />
-        </div>
-    );
-}
-
-function Home2() {
-
-    const [isVisual, setIsVisual] = React.useState(false);
-    const [matrixData, setMatrixData] = React.useState([
-        [1, 2, 3],
-        [4, 5, 6],
-        [7, 8, 9],
-    ]);
-
-    const [path, setPath] = React.useState([
-        [0, 0],
-        [1, 1],
-        [1, 2],
-        [2, 2],
-    ]);
-
-    const [videoSrc, setVideoSrc] = React.useState("videos/test3.mp4");
-    const [videoSrc1, setVideoSrc1] = React.useState("videos/vid0.mp4");
-    const [videoSrc2, setVideoSrc2] = React.useState("videos/vid1.mp4");
-    
-
-    React.useEffect(() => {
-        fetch(process.env.PUBLIC_URL + "/json/data.json")
-            .then((res) => res.json())
-            .then((data) => {
-                setMatrixData(data["acc_cost_matrix"]);
-                setPath(data["path"]);
-                console.log(data);
-            })
-            .catch((err) => {
-                console.log(process.env.PUBLIC_URL + "/cost.json");
-                console.log("Error fetching tensor data:", err);
-            });
-    }, []);
-
-    return (
-        <div>
-            <div className="App">
-                {isVisual ?
-                (
-                <div>
-                    <Matrix2 
-                    matrixData={matrixData} 
-                    path={path}
-                    videoSrc={videoSrc}
-                    videoSrc1={videoSrc1}
-                    videoSrc2={videoSrc2}
-                    setIsVisual={setIsVisual}/>
-                </div>
-                ) : (
-                <div>
-                    <Dropdown 
-                    setVideoSrc={setVideoSrc}
-                    setVideoSrc1={setVideoSrc1}
-                    setVideoSrc2={setVideoSrc2}
-                    setMatrixData={setMatrixData}
-                    setPath={setPath}
-                    setIsVisual={setIsVisual}/>
-                </div>
-                ) 
-                }
-            </div>
         </div>
     );
 }
