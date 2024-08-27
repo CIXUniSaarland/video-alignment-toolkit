@@ -1,7 +1,7 @@
 import React from "react";
 import './video.css';
 
-function VideoPlayer({ videoSrc }) {
+function VideoPlayer({ videoSrc, setCurrentFrameVideo }) {
     const videoRef = React.useRef(null);
     const timelineRef = React.useRef(null);
     const [isPlaying, setIsPlaying] = React.useState(false);
@@ -20,7 +20,9 @@ function VideoPlayer({ videoSrc }) {
             });
 
             videoRef.current.addEventListener("timeupdate", () => {
-                setCurrentFrame(Math.floor(videoRef.current.currentTime * frameRate));
+                const frame_i = Math.floor(videoRef.current.currentTime * frameRate);
+                setCurrentFrame(frame_i);
+                if (setCurrentFrameVideo) setCurrentFrameVideo(frame_i);
             });
         }
     }, [frameRate]);
@@ -64,4 +66,47 @@ function VideoPlayer({ videoSrc }) {
     )
 }
 
-export {VideoPlayer};
+function ShowFrames({ closestFrames, videoSrc }) {
+    const [frameImages, setFrameImages] = React.useState([]);
+
+    React.useEffect(() => {
+        if (closestFrames && videoSrc) {
+            const frameImagePromises = closestFrames.map((frame) => {
+                return new Promise((resolve) => {
+                    const video = document.createElement('video');
+                    video.src = videoSrc;
+                    video.currentTime = frame / 30; // Assuming a 30 FPS video, adjust if necessary
+                    video.muted = true;
+                    video.addEventListener('loadeddata', () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/png'));
+                    });
+                });
+            });
+
+            Promise.all(frameImagePromises).then((images) => {
+                setFrameImages(images);
+            });
+        }
+    }, [closestFrames, videoSrc]);
+
+    return (
+        <div className="closest-frames">
+            <h3>Closest Frames</h3>
+            <div className="frame-list">
+                {frameImages.map((image, index) => (
+                    <div key={index} className="frame-item">
+                        <img src={image} alt={`Frame ${closestFrames[index]}`} width="120" height="90" />
+                        <p>Frame {closestFrames[index]}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+export {VideoPlayer, ShowFrames};

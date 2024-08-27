@@ -213,6 +213,33 @@ def align_videos():
         return jsonify({'message': 'success'})
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
+    
+@app.route('/frame_retrieval', methods=['POST'])
+def frame_retrieval():
+    try:
+        data = request.get_json()
+        logger.info(f"[POST /frame_retrieval] Request received with data: {data}")
+        dataset = data['dataset']
+        video1 = data['video1']
+        video2 = data['video2']
+        frame1 = data['frame1']
+        directory = data['directory']
+        args = f"--dataset='{dataset}' --video1='{video1}' --video2='{video2}' --video1_frame={frame1} --directory='{directory}'"
+
+        command = f"source ~/anaconda3/etc/profile.d/conda.sh && conda activate carl && python server/frame_retr.py {args}"
+        result = subprocess.run(command, 
+                                shell=True, 
+                                check=True, 
+                                executable='/bin/bash', 
+                                capture_output=True, 
+                                text=True)
+
+        output_json = json.loads(result.stdout)
+
+        return jsonify({'message': 'success', 'result': output_json})
+    
+    except Exception as e:
+        return jsonify({'message': 'error', 'error': str(e)})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
