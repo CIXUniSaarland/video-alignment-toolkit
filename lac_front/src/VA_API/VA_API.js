@@ -1,19 +1,106 @@
 import React, { useState, useEffect } from "react";
+import { 
+    fetchDatasets, 
+    fetchVideos, 
+    fetchVideoDurations,
+    saveConfig,
+    startEventSource,
+    getDefaultConfig
+} from "../util/api";
 import "./VA_API.css";
 
-function RecursiveJsonEditor({ data, onChange }) {
+function RecursiveJsonEditor({ data, onChange, setWarningMessage }) {
+    const [modelOptions, setModelOptions] = useState(["model1", "model2", "model3"]);
+    const acceptedKeys = {
+        "n_gpu": {
+            "name": "Number of GPUs",
+            "type": "int"
+        },
+        "data_loader": {
+            "name": "Data Loader",
+            "type": "object"
+        },
+        "batch_size": {
+            "name": "Batch Size",
+            "type": "int"
+        },
+        "num_frames": {
+            "name": "Number of Frames",
+            "type": "int"
+        },
+        "trainer": {
+            "name": "Trainer",
+            "type": "object"
+        },
+        "epochs": {
+            "name": "Epochs",
+            "type": "int"
+        },
+        "resume": {
+            "name": "Resume",
+            "type": "bool"
+        },
+        "save_dir": {
+            "name": "Working Directory",
+            "type": "str"
+        },
+        "resume_model": {
+            "name": "Resume Model",
+            "type": "str",
+            "options": modelOptions
+        }
+    };
+
+    const fetchModelOptions = async () => {
+        try {
+            const response = await fetch(`${process.env.REACT_APP_API_HOST}/get_model_options`,{
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ working_dir: data.save_dir })
+            });
+            const data_ = await response.json();
+            
+            if (response.ok && data_.message === 'success') {
+                if (data_.models) {
+                    setModelOptions(data_.models || []);
+                } else {
+                    setWarningMessage('No models found in the working directory.');
+                    setModelOptions([]);
+                    onChange({ ...data, resume: false });
+                }
+            } else {
+                setWarningMessage('Failed to fetch model options: ' + data_.error);
+                console.error('Failed to fetch model options:', data_.error);
+                onChange({ ...data, resume: false });
+            }
+        } catch (err) {
+            console.error('Error fetching model options:', err);
+        }
+    };
+        
     const handleChange = (e, key) => {
-        const value = e.target.value;
+        const value = acceptedKeys[key].type === 'bool' ? e.target.checked : e.target.value;
         onChange({ ...data, [key]: value });
+        if (key === 'resume' && value) {
+            fetchModelOptions();
+        }
     };
 
     const handleNestedChange = (key, updatedValue) => {
         onChange({ ...data, [key]: updatedValue });
     };
 
+    const filterKey = (key) => {
+        return acceptedKeys[key] !== undefined;
+    };
+
     return (
         <div className="json-editor">
-            {Object.keys(data).map((key) => (
+            {Object.keys(data)
+            .filter(key => filterKey(key))
+            .map((key) => (
                 <div key={key} className="mb-3">
                     {typeof data[key] === 'object' && data[key] !== null ? (
                         <div className="nested">
@@ -21,20 +108,50 @@ function RecursiveJsonEditor({ data, onChange }) {
                             <RecursiveJsonEditor 
                                 data={data[key]} 
                                 onChange={(updatedValue) => handleNestedChange(key, updatedValue)} 
+                                setWarningMessage={setWarningMessage}
                             />
                         </div>
                     ) : (
-                        <div className="row step3-json w-100">
+                        key !== "resume_model" && <div className="row step3-json w-100">
                             <div className="col-md-3">
-                                <label className="form-label">{key}</label>
+                                <label className="form-label">{acceptedKeys[key]["name"]}</label>
                             </div>
                             <div className="col-md-9">
-                                <input 
-                                    type="text" 
-                                    value={data[key]} 
-                                    onChange={e => handleChange(e, key)} 
-                                    className="form-control"
-                                />
+                                {acceptedKeys[key].type === 'bool' ? (
+                                    <input 
+                                        type="checkbox" 
+                                        checked={!!data[key]} 
+                                        onChange={e => handleChange(e, key)} 
+                                        className="form-check-input"
+                                    />
+                                ) : (
+                                    <input 
+                                        type="text" 
+                                        value={data[key]} 
+                                        onChange={e => handleChange(e, key)} 
+                                        className="form-control"
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Show "Resume Model" select dropdown only if "Resume" checkbox is true */}
+                    {key === 'resume' && data.resume && (
+                        <div className="row step3-json w-100 mt-3">
+                            <div className="col-md-3">
+                                <label className="form-label">{acceptedKeys['resume_model'].name}</label>
+                            </div>
+                            <div className="col-md-9">
+                                <select 
+                                    value={data['resume_model'] || acceptedKeys['resume_model'].options[0]} 
+                                    onChange={e => handleChange(e, 'resume_model')} 
+                                    className="form-select"
+                                >
+                                    {acceptedKeys['resume_model'].options.map(option => (
+                                        <option key={option} value={option}>{option}</option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
                     )}
@@ -44,90 +161,69 @@ function RecursiveJsonEditor({ data, onChange }) {
     );
 }
 
+
 function VA_API() {
     const [currentStep, setCurrentStep] = useState(1);
-    const [loading, setLoading] = React.useState(false);
-
-    const nextStep = () => {
-        setCurrentStep(prevStep => prevStep + 1);
-    };
-
-    const prevStep = () => {
-        setCurrentStep(prevStep => Math.max(prevStep - 1, 1));
-    };
-
+    const [loading, setLoading] = useState(false);
     const [datasets, setDatasets] = useState([]);
     const [videos, setVideos] = useState([]);
+    const [videoDurations, setVideoDurations] = useState([]);
     const [selectedDataset, setSelectedDataset] = useState('');
-    React.useEffect(() => {
-        fetch('http://localhost:5001/list_datasets')
-            .then(response => response.json())
-            .then(data => {
-                if (data.message === 'success') {
-                    setDatasets(data.datasets);
-                } else {
-                    console.error('Failed to fetch datasets:', data.error);
-                }
-            })
-            .catch(error => console.error('Error fetching datasets:', error));
-    }, []);
+    const [warningMessage, setWarningMessage] = useState('');
 
-    React.useEffect(() => {
-        const fetchData = async () => {
+    useEffect(() => {
+        const loadDatasets = async () => {
+            const fetchedDatasets = await fetchDatasets();
+            setDatasets(fetchedDatasets);
+        };
+
+        const loadVideosAndDurations = async () => {
             if (!selectedDataset) return;
+
             setLoading(true);
-    
-            try {
-                const responseVideos = await fetch('http://localhost:5001/list_videos', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ dataset: selectedDataset })
-                });
-    
-                const dataVideos = await responseVideos.json();
-    
-                if (dataVideos.message === 'success') {
-                    setVideos(dataVideos.videos);
-    
-                    const responseDurations = await fetch('http://localhost:5001/get_video_durations', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            dataset: selectedDataset,
-                            videos: dataVideos.videos
-                        })
-                    });
-    
-                    const dataDurations = await responseDurations.json();
-    
-                    if (dataDurations.message === 'success') {
-                        setVideoDurations(dataDurations.durations);
-                        // nextStep(); // Move to next step if necessary
-                    } else {
-                        console.error('Failed to fetch video durations:', dataDurations.error);
-                    }
-                } else {
-                    console.error('Failed to fetch videos:', dataVideos.error);
-                }
-            } catch (error) {
-                console.error('Error fetching data:', error);
-            } finally {
-                setLoading(false); // Stop loading
+            const fetchedVideos = await fetchVideos(selectedDataset);
+            setLoading(false);
+            setVideos(fetchedVideos);
+
+            if (fetchedVideos.length > 0) {
+                const fetchedDurations = await fetchVideoDurations(selectedDataset, fetchedVideos);
+                setVideoDurations(fetchedDurations);
             }
         };
-    
-        fetchData();
+
+        // Fetch datasets on initial render
+        loadDatasets();
+
+        // Fetch videos and durations when selectedDataset changes
+        if (selectedDataset) {
+            loadVideosAndDurations();
+        }
+
         if (currentStep === 2) {
             evaluateDataset();
         }
-    }, [selectedDataset]);
-    const [videoDurations, setVideoDurations] = useState({});
 
-    const [warningMessage, setWarningMessage] = useState('');
+        // warning
+        if (warningMessage) {
+            const timer = setTimeout(() => {
+                setWarningMessage('');
+            }, 5000);
+
+            return () => clearTimeout(timer);
+        }
+
+        // config
+        if (currentStep === 3 && !configData) {
+            getDefaultConfig().then((config) => {
+                setConfigData(config);
+            });
+        }
+
+    }, [selectedDataset, currentStep, warningMessage]);
+
+    const nextStep = () => setCurrentStep(prevStep => prevStep + 1);
+    const prevStep = () => setCurrentStep(prevStep => Math.max(prevStep - 1, 1));
+
     const [datasetGrade, setDatasetGrade] = useState(0);
     const handleWarning = () => {
 
@@ -178,22 +274,6 @@ function VA_API() {
 
     const [configData, setConfigData] = useState(null);
     const [configFileName, setConfigFileName] = useState('');
-    const handleFileUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file) {
-            return;
-        };
-        setConfigFileName(file.name);
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const json = JSON.parse(event.target.result);
-            setConfigData(json);
-            // nextStep();
-        };
-        reader.readAsText(file);
-    };
-
     const handleConfigChange = (updatedConfig) => {
         setConfigData(updatedConfig);
     };
@@ -204,63 +284,20 @@ function VA_API() {
     const [logs, setLogs] = useState('');
     function startTraining() {
         setIsTrain(true);
-
-        // API call to save the config first
-        fetch('http://localhost:5001/save_config', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                dataset: selectedDataset,
-                saved_dir: savedDir,
-                config: configData,
-                is_same_dir: isSameDirectory,
-            }),
-        })
-        .then(response => response.json())
-        .then(saveConfigData => {
-            if (saveConfigData.message !== 'success') {
-                throw new Error('Failed to save config: ' + saveConfigData.error);
-            }
-            
-            console.log('Config saved:', saveConfigData);
-            const url = new URL('http://localhost:5001/train_sse');
-            url.searchParams.append('config', saveConfigData.config_path);
-            const eventSource = new EventSource(url.toString());
-
-            eventSource.onmessage = function(event) {
-                // console.log('New training log:', event.data);
-                setLogs(prevLogs => prevLogs + event.data);
-            };
-
-            eventSource.onerror = function(error) {
-                console.error('EventSource failed:', error);
-                eventSource.close();
+    
+        saveConfig(selectedDataset, savedDir, configData, isSameDirectory)
+            .then((configPath) => {
+                const closeEventSource = startEventSource(configPath, setLogs, setIsTrain);
+                return closeEventSource;
+            })
+            .catch((error) => {
+                console.error('Error during the training process:', error);
                 setIsTrain(false);
-            };
-
-            return () => {
-                eventSource.close();
-            };
-        })
-        .catch(error => {
-            console.error('Error during the training process:', error);
-            setIsTrain(false);
-        });
+            });
     }
 
-    const isDisabled = (!selectedDataset && currentStep === 1) || loading || (!configFileName && currentStep === 3);
-
-    React.useEffect(() => {
-        if (warningMessage) {
-            const timer = setTimeout(() => {
-                setWarningMessage('');
-            }, 5000); // 5000 milliseconds = 5 seconds
-
-            return () => clearTimeout(timer);
-        }
-    }, [warningMessage]);
+    // next button: disabled
+    const isDisabled = (!selectedDataset && currentStep === 1) || loading || (!configData && currentStep === 3);
     
     return (
         <div className="w-100">
@@ -360,18 +397,17 @@ function VA_API() {
                     {/* STEP3 */}
                     <div className={`step ${currentStep === 3 ? 'visible' : ''}`}>
                         <div className="d-flex justify-content-between align-items-center">
-                            <h5>3. Load and Edit Config JSON File</h5>
+                            <h5>3. Configuration</h5>
                         </div>
 
-                        <p>Load a JSON configuration file to edit the parameters for training.</p>
-                        <div className="my-3">
-                            <input 
-                                type="file" 
-                                accept=".json"
-                                onChange={handleFileUpload} 
-                                className="form-control"
-                            />
-                        </div>
+                        <p>Configure the training settings according to your computer's hardware capabilities. 
+                            The default settings are optimized for a single GPU. 
+                            If you have multiple or more powerful GPUs, you can increase the number of frames, batch size, epochs, and other relevant parameters.
+                        </p>
+
+                        <p>
+                        You can resume training after adding more training files or if you want to improve performance from a previous checkpoint by providing the path to the saved model.
+                        </p>
 
                         {configData && (
                             <div className="my-3 config-section">
@@ -380,6 +416,7 @@ function VA_API() {
                                     <RecursiveJsonEditor 
                                         data={configData} 
                                         onChange={handleConfigChange} 
+                                        setWarningMessage={setWarningMessage}
                                     />
                                 </form>
                             </div>
@@ -399,35 +436,6 @@ function VA_API() {
                             )}
                         </div>
                         <p>Here is a summary of the settings. If you are sure, you can click the 'Train' button below.</p>
-
-                        <div className="row mb-3">
-                            <div className="col-md-4">
-                                <label className="form-label">Saved Directory:</label>
-                            </div>
-                            <div className="col-md-8 custom-input">
-                                <input 
-                                    type="text" 
-                                    value={savedDir} 
-                                    onChange={(e) => setSavedDir(e.target.value)}
-                                    className="form-control"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="row mb-5 form-switch">
-                            <div className="col-md-4">
-                                <label class="form-check-label" for="flexSwitchCheckDefault">Set the results directory the same as the saved directory above</label>
-                            </div>
-                            <div className="col-md-8 custom-input">
-                                <input 
-                                    className="form-check-input me-2" 
-                                    type="checkbox" 
-                                    id="flexSwitchCheckDefault"
-                                    checked={isSameDirectory}
-                                    onChange={(e) => setIsSameDirectory(e.target.checked)}
-                                ></input> {isSameDirectory ? 'Yes' : 'No'}
-                            </div>
-                        </div>
                         
                         <div className="summary w-100">
                             <h6>Dataset: {selectedDataset}</h6>

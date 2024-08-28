@@ -246,6 +246,31 @@ def frame_retrieval():
     
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
+    
+@app.route('/get_default_config', methods=['GET'])
+def get_default_config():
+    try:
+        config_path = 'config/pouring/lac.json'
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        return jsonify({'message': 'success', 'config': config})
+    except Exception as e:
+        return jsonify({'message': 'error', 'error': str(e)})
+    
+@app.route('/get_model_options', methods=['POST'])
+def get_model_options():
+    try:
+        data = request.get_json()
+        logger.info(f"[POST /get_model_options] Request received with data: {data}")
+        working_dir = data['working_dir']
+        # check if working_dir exists
+        model_working_dir = os.path.join(working_dir, 'models')
+        if not os.path.exists(working_dir) or not os.path.exists(model_working_dir):
+            return jsonify({'message': 'error', 'error': f"Working directory {working_dir} does not exist."})
+        models = os.listdir(model_working_dir)
+        return jsonify({'message': 'success', 'models': models})
+    except Exception as e:
+        return jsonify({'message': 'error', 'error': str(e)})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
