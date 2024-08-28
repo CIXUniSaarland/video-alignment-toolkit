@@ -2,8 +2,6 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from "react-router-dom";
 import "./App.css";
 // Components
-import { Matrix2 } from "./Algo/Algo.js";
-import { Dropdown } from "./Video/Dropdown/Dropdown.js";
 import { Footer, Page } from "./Page/Page.js";
 // Pages
 import { VA_AL } from "./VA_AL/VA_AL.js";
