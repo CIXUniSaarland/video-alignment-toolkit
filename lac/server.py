@@ -184,14 +184,11 @@ def list_folders():
 def get_video():
     try:
         data = request.get_json()
-        data_dir = '/home/cix-desktop-2/Documents/k/datasets/pouring/videos/'
-
         logger.info(f"[POST /get_video] Request received with data: {data}")
         dataset = data['dataset']
         video = data['video']
-        video_path = f'../datasets/{dataset}/videos/{video}'
-        # send from directory
-        return send_from_directory(data_dir, video)
+        video_path = f'../datasets/{dataset}/videos/'
+        return send_from_directory(video_path, video)
         
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
