@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-const DTWPathVisualizer = ({ costMatrix, dtwPath, cellSize = 4 }) => {
+const DTWPathVisualizer = ({ costMatrix, dtwPath, setFrame1, setFrame2, cellSize = 4 }) => {
     const canvasRef = useRef(null);
     const [hoveredCell, setHoveredCell] = useState({ x: null, y: null });
 
@@ -61,6 +61,9 @@ const DTWPathVisualizer = ({ costMatrix, dtwPath, cellSize = 4 }) => {
 
             if (closestPoint) {
                 setHoveredCell(closestPoint);
+                
+                setFrame1(closestPoint.y);
+                setFrame2(closestPoint.x);
             }
         };
 
@@ -106,7 +109,7 @@ const DTWPathVisualizer = ({ costMatrix, dtwPath, cellSize = 4 }) => {
             const dotY = hoveredCell.y * cellSize + cellSize / 2;
             ctx.fillStyle = 'blue';
             ctx.beginPath();
-            ctx.arc(dotX, dotY, cellSize , 0, 2 * Math.PI);
+            ctx.arc(dotX, dotY, 2 * cellSize , 0, 2 * Math.PI);
             ctx.fill();
         }
     }, [hoveredCell, costMatrix, dtwPath, cellSize]);

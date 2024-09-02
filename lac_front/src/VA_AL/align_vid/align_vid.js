@@ -2,6 +2,7 @@ import React from "react";
 import { Breadcrumbs } from "../VA_AL";
 import { VideoPlayer } from "../../util/video";
 import { DTWPathVisualizer } from "./dtw_path";
+import axios from "axios";
 
 function AlignVideos() {
     const breadcrumbItems = [
@@ -11,6 +12,7 @@ function AlignVideos() {
     ];
 
     const [currentStep, setCurrentStep] = React.useState(1);
+    const [loading, setLoading] = React.useState(false);
     const nextStep = () => {
         setCurrentStep(prevStep => prevStep + 1);
     };
@@ -28,8 +30,12 @@ function AlignVideos() {
     
     const [selectedVideos1, setSelectedVideos1] = React.useState('');
     const [videoSrc1, setVideoSrc1] = React.useState('');
+    const [videoFrame1, setVideoFrame1] = React.useState(0);
+    const [frame1, setFrame1] = React.useState(null);
     const [selectedVideos2, setSelectedVideos2] = React.useState('');
     const [videoSrc2, setVideoSrc2] = React.useState('');
+    const [videoFrame2, setVideoFrame2] = React.useState(0);
+    const [frame2, setFrame2] = React.useState(null);
 
     const [costMatrix, setCostMatrix] = React.useState([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
     const [path, setPath] = React.useState([[0,0], [1,1], [1,2], [2,2]]);
@@ -45,7 +51,43 @@ function AlignVideos() {
                 }
             })
             .catch(error => console.error('Error fetching datasets:', error));
-    }, []);
+
+        // detect videoFrame1 changes
+        if (videoFrame1 !== 0) {
+            axios.post('http://localhost:5001/get_frame', {
+                video: selectedVideos1,
+                frame: videoFrame1,
+                dataset: selectedDataset,
+            }, {
+                responseType: 'blob'
+            })
+            .then(response => {
+                const blob = response.data;
+                const img = URL.createObjectURL(blob);
+                setFrame1(img);
+            })
+            .catch(error => console.error('Error fetching frame:', error));
+        }
+
+        // detect videoFrame2 changes
+        if (videoFrame2 !== 0) {
+            axios.post('http://localhost:5001/get_frame', {
+                video: selectedVideos2,
+                frame: videoFrame2,
+                dataset: selectedDataset,
+            }, {
+                responseType: 'blob'
+            })
+            .then(response => {
+                const blob = response.data;
+                const img = URL.createObjectURL(blob);
+                setFrame2(img);
+            }
+            )
+            .catch(error => console.error('Error fetching frame:', error));
+        }
+
+    }, [videoFrame1, videoFrame2]);
 
     React.useEffect(() => {
         const fetchData = async () => {
@@ -123,6 +165,7 @@ function AlignVideos() {
                     }
 
                     function alignVid() {
+                        setLoading(true);
                         try {
                             fetch('http://localhost:5001/align_videos', {
                                 method: 'POST',
@@ -143,6 +186,7 @@ function AlignVideos() {
                                         setCostMatrix(data.result.acc_cost_mat);
                                         setPath(data.result.path);
                                         nextStep();
+                                        setLoading(false);
                                     } else {
                                         console.error('Failed to align videos:', data.error);
                                     }
@@ -162,7 +206,27 @@ function AlignVideos() {
 
                             {/* STEP3 */}
                             <div className={currentStep === 3 ? "w-100" : "d-none"}>
-                                <DTWPathVisualizer costMatrix={costMatrix} dtwPath={path} />
+                                <div className="row">
+                                    <div className="col-md-12">
+                                        <DTWPathVisualizer 
+                                        costMatrix={costMatrix} 
+                                        dtwPath={path} 
+                                        cellSize={3} 
+                                        setFrame1={setVideoFrame1}
+                                        setFrame2={setVideoFrame2}/>
+                                    </div>
+                                </div>
+
+                                <div className="row">
+                                    <div className="col-md-6">
+                                        <h5>Reference Video Frame: {videoFrame1}</h5>
+                                        <img src={frame1} alt="Video Frame" style={{ width: '300px' }} />
+                                    </div>
+                                    <div className="col-md-6">
+                                        <h5>Query Video Frame: {videoFrame2}</h5>
+                                        <img src={frame2} alt="Video Frame" style={{ width: '300px' }} />
+                                    </div>
+                                </div>
                             </div>
                             
                             <div className="row">
@@ -305,9 +369,17 @@ function AlignVideos() {
                                                 </div>
                                             )}
                                             <div className="d-flex justify-content-between mt-3">
+                                            {(loading &&
+                                                <div className="loading-spinner ms-auto me-3">
+                                                    <div className="spinner-border" role="status">
+                                                        <span className="visually-hidden">Loading...</span>
+                                                    </div>
+                                                </div>
+                                            )}
                                                 <button
-                                                className="btn btn-primary ms-auto"
+                                                className={`btn btn-primary ${loading ? '' : 'ms-auto'}`}
                                                 onClick={alignVid}
+                                                disabled={loading || (!selectedVideos1 || !selectedVideos2)}
                                                 >Align</button>
                                             </div>
                                         </div>

@@ -156,7 +156,7 @@ const Breadcrumbs = ({ breadcrumbs }) => {
 
 function VA_AL() {
     return (
-        <div>
+        <div className='w-100'>
             <h2>VAT: Analysis</h2>
             {/* Menu
             1. Extract embeddings
@@ -165,36 +165,35 @@ function VA_AL() {
             4. Anomaly Detection */}
             <p>
                 The alignment API offers various functionalities:
-                <br/>1. <b>Extract Embeddings</b>, The first step for other functionalities is to extract embeddings.
-                <br/>2. <b>Align Videos</b>, Perform alignment between two videos.
-                <br/>3. <b>Frame Retrieval</b>, Retrieve frames based on phases.
-                <br/>4. <b>Anomaly Detection</b>, Detect anomalies between videos.
+                <br/>1. <b>Align Videos</b>, Perform alignment between two videos.
+                <br/>2. <b>Frame Retrieval</b>, Retrieve frames based on phases.
+                <br/>3. <b>Anomaly Detection</b>, Detect anomalies between videos.
             </p>
 
             <div className='w-100'>
                 <div className='row text-center'>
-                    <div className="col-md-6 position-relative">
+                    {/* <div className="col-md-6 position-relative">
                         <Link to="./ext-emb" className="menu-item" title="Extract embeddings from data">
                             <i className="bi bi-box-arrow-in-down"></i>
                             <h4 className="mt-3">Extract Embeddings <i className="bi bi-info-circle-fill tooltip-symbol"
                             data-bs-toggle="tooltip" data-bs-placement="top"></i></h4>
                         </Link>
-                    </div>
-                    <div className="col-md-6 position-relative">
+                    </div> */}
+                    <div className="col-md-4 position-relative">
                         <Link to="./align-vid" className="menu-item" title="Align videos using matrix operations">
                             <i className="bi bi-aspect-ratio"></i>
                             <h4 className="mt-3">Align Videos <i className="bi bi-info-circle-fill tooltip-symbol"
                             data-bs-toggle="tooltip" data-bs-placement="top"></i></h4>
                         </Link>
                     </div>
-                    <div className="col-md-6 position-relative">
+                    <div className="col-md-4 position-relative">
                         <Link to="./frame-retr" className="menu-item" title="Retrieve frames from videos">
                             <i className="bi bi-collection"></i>
                             <h4 className="mt-3">Frame Retrieval <i className="bi bi-info-circle-fill tooltip-symbol"
                             data-bs-toggle="tooltip" data-bs-placement="top"></i></h4>
                         </Link>
                     </div>
-                    <div className="col-md-6 position-relative">
+                    <div className="col-md-4 position-relative">
                         <Link to="./anomaly-det" className="menu-item" title="Detect anomalies in data">
                             <i className="bi bi-exclamation-triangle-fill"></i>
                             <h4 className="mt-3">Anomaly Detection <i className="bi bi-info-circle-fill tooltip-symbol"

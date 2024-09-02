@@ -10,21 +10,34 @@ function VideoPlayer({ videoSrc, setCurrentFrameVideo }) {
     const [frameRate, setFrameRate] = React.useState(30); 
 
     React.useEffect(() => {
-        if (videoRef.current) {
-            videoRef.current.addEventListener("loadedmetadata", () => {
-                const tracks = videoRef.current.videoTracks;
-                if (tracks && tracks[0] && tracks[0].frameRate) {
-                    setFrameRate(tracks[0].frameRate);
-                }
-                setTotalFrames(Math.floor(videoRef.current.duration * frameRate));
-            });
+        const handleLoadedMetadata = () => {
+            const duration = videoRef.current.duration;
+            // Assuming the video is encoded at 30 fps as a fallback
+            const calculatedFrameRate = 30;
+            const calculatedTotalFrames = Math.floor(duration * calculatedFrameRate);
 
-            videoRef.current.addEventListener("timeupdate", () => {
-                const frame_i = Math.floor(videoRef.current.currentTime * frameRate);
-                setCurrentFrame(frame_i);
-                if (setCurrentFrameVideo) setCurrentFrameVideo(frame_i);
-            });
+            setFrameRate(calculatedFrameRate);
+            setTotalFrames(calculatedTotalFrames);
+        };
+
+        const handleTimeUpdate = () => {
+            const frame_i = Math.floor(videoRef.current.currentTime * frameRate);
+            setCurrentFrame(frame_i);
+            if (setCurrentFrameVideo) setCurrentFrameVideo(frame_i);
+        };
+
+        const videoElement = videoRef.current;
+        if (videoElement) {
+            videoElement.addEventListener("loadedmetadata", handleLoadedMetadata);
+            videoElement.addEventListener("timeupdate", handleTimeUpdate);
         }
+
+        return () => {
+            if (videoElement) {
+                videoElement.removeEventListener("loadedmetadata", handleLoadedMetadata);
+                videoElement.removeEventListener("timeupdate", handleTimeUpdate);
+            }
+        };
     }, [frameRate]);
 
     const handlePlayPause = () => {
@@ -35,7 +48,7 @@ function VideoPlayer({ videoSrc, setCurrentFrameVideo }) {
             videoRef.current.pause();
             setIsPlaying(false);
         }
-    }
+    };
 
     const handleTimelineClick = (event) => {
         const timelineWidth = timelineRef.current.offsetWidth;
@@ -58,12 +71,11 @@ function VideoPlayer({ videoSrc, setCurrentFrameVideo }) {
                         className="timeline-progress"
                         style={{ width: `${(currentFrame / totalFrames) * 100}%` }}
                     ></div>
-                    
                 </div>
                 <div className="time">{currentFrame} / {totalFrames}</div>
             </div>
         </div>
-    )
+    );
 }
 
 function ShowFrames({ closestFrames, videoSrc }) {

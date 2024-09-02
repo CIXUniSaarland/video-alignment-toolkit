@@ -7,9 +7,13 @@ import os
 import glob
 from datetime import datetime, timedelta
 import re
+from PIL import Image
+import io
 
 from loguru import logger
 from moviepy.editor import VideoFileClip
+
+from dataset.util import read_video
 
 app = Flask(__name__)
 CORS(app)
@@ -308,6 +312,26 @@ def align_videos():
         output_json = json.loads(result.stdout)
         
         return jsonify({'message': 'success', 'result': output_json})
+    except Exception as e:
+        return jsonify({'message': 'error', 'error': str(e)})
+    
+@app.route('/get_frame', methods=['POST'])
+def get_frame():
+    try:
+        data = request.get_json()
+        logger.info(f"[POST /get_frame] Request received with data: {data}")
+        dataset = data['dataset']
+        video = data['video']
+        frame = data['frame']
+        video_path = f'../datasets/{dataset}/videos/{video}'
+        video = read_video(video_path)
+        frame = video[frame]
+        image = Image.fromarray(frame.astype('uint8'))
+        img_io = io.BytesIO()
+        image.save(img_io, 'JPEG')
+        img_io.seek(0)
+
+        return Response(img_io, mimetype='image/jpeg')
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
     
