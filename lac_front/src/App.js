@@ -60,36 +60,29 @@ function Home() {
                 <div className="w-100">
                     <div className="row py-5">
                         <div className="col-md-12">
-                            <h2>Video Alignment Toolkit Homepage</h2>
-                            <p>The Video Alignment Toolkit integrates video alignment algorithms into applications with three key functions. 
-                                <br/>1. <b>Training</b>, it supports the training of video embeddings to achieve accurate alignment across multiple video sources. 
-                                <br/>2. <b>Analysis</b>, it offers advanced analysis tools that allow for detailed examination and understanding of videos based on alignment results. 
-                                <br/>3. <b>Instruction</b>, it functions as middleware, enabling seamless integration of video data into mixed reality environments. </p>
+                            <h2>VideoAlign Toolkit Homepage</h2>
+                            <p>This toolkit makes video alignment algorithms accessible through two major components: 
+                                <br/>1. <b>Training Models</b>, it supports the training of video embeddings by aligning multiple videos of a specific task or action. 
+                                <br/>2. <b>Using Models</b>, once a model is trained, the toolkit can align videos, retrieve video frames from a picture, and detect anomalies.
+                            </p>
                         </div>
                     </div>
 
-                    <div className="row text-center">
-                        <div className="col-md-4 position-relative">
+                    <div className="row text-center justify-content-center">
+                        <div className="col-6 col-md-4 position-relative">
                             <Link to="/va-api" className="menu-item" title="Start a training session">
                                 <i className="bi bi-play-circle-fill"></i>
-                                <h3 className="mt-3">Training <i className="bi bi-info-circle-fill tooltip-symbol"
+                                <h3 className="mt-3">Train Model <i className="bi bi-info-circle-fill tooltip-symbol"
                                    data-bs-toggle="tooltip" data-bs-placement="top"></i></h3>
                             </Link>
                         </div>
-                        <div className="col-md-4 position-relative">
+                        <div className="col-6 col-md-4 position-relative">
                             <Link to="/va-analysis" className="menu-item" title="Analyze Videos">
                                 <i className="bi bi-graph-up"></i>
-                                <h3 className="mt-3">Analysis <i className="bi bi-info-circle-fill tooltip-symbol"
+                                <h3 className="mt-3">Use Model <i className="bi bi-info-circle-fill tooltip-symbol"
                                    data-bs-toggle="tooltip" data-bs-placement="top"></i></h3>
                                 
                             </Link>
-                        </div>
-                        <div className="col-md-4 position-relative">
-                            <div className="menu-item" title="Instruction to Mixed Reality">
-                                <i className="bi bi-book"></i>
-                                <h3 className="mt-3">Instruction <i className="bi bi-info-circle-fill tooltip-symbol"
-                                   data-bs-toggle="tooltip" data-bs-placement="top"></i></h3>
-                            </div>
                         </div>
                     </div>
                 </div>
