@@ -5,9 +5,17 @@ import {
     fetchVideoDurations,
     saveConfig,
     startEventSource,
-    getDefaultConfig
+    getDefaultConfig,
+    startWebSocketConnection,
+    stopTrainingSocket
 } from "../util/api";
 import "./VA_API.css";
+import io from 'socket.io-client';
+import { Line } from 'react-chartjs-2';
+import { Chart, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
+
+Chart.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+
 
 function RecursiveJsonEditor({ data, onChange, setWarningMessage }) {
     const [modelOptions, setModelOptions] = useState(["model1", "model2", "model3"]);
@@ -26,7 +34,8 @@ function RecursiveJsonEditor({ data, onChange, setWarningMessage }) {
         },
         "num_frames": {
             "name": "Number of Frames",
-            "type": "int"
+            "type": "int",
+            "options": [16, 32, 64, 128]
         },
         "trainer": {
             "name": "Trainer",
@@ -40,7 +49,7 @@ function RecursiveJsonEditor({ data, onChange, setWarningMessage }) {
             "name": "Resume",
             "type": "bool"
         },
-        "save_dir": {
+        "working_dir": {
             "name": "Working Directory",
             "type": "str"
         },
@@ -58,20 +67,21 @@ function RecursiveJsonEditor({ data, onChange, setWarningMessage }) {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ working_dir: data.save_dir })
+                body: JSON.stringify({ working_dir: data.working_dir })
             });
             const data_ = await response.json();
             
             if (response.ok && data_.message === 'success') {
-                if (data_.models) {
-                    setModelOptions(data_.models || []);
+                if (data_.models.length > 0) {
+                    setModelOptions(data_.models);
                 } else {
                     setWarningMessage('No models found in the working directory.');
                     setModelOptions([]);
                     onChange({ ...data, resume: false });
                 }
             } else {
-                setWarningMessage('Failed to fetch model options: ' + data_.error);
+                setWarningMessage('Failed to fetch model options: ' + data_.error +
+                    ' Please check if the working directory is correct.');
                 console.error('Failed to fetch model options:', data_.error);
                 onChange({ ...data, resume: false });
             }
@@ -117,7 +127,17 @@ function RecursiveJsonEditor({ data, onChange, setWarningMessage }) {
                                 <label className="form-label">{acceptedKeys[key]["name"]}</label>
                             </div>
                             <div className="col-md-9">
-                                {acceptedKeys[key].type === 'bool' ? (
+                                {acceptedKeys[key].options ? (
+                                    <select
+                                        value={data[key] || acceptedKeys[key].options[0]}
+                                        onChange={e => handleChange(e, key)}
+                                        className="form-select"
+                                    >
+                                        {acceptedKeys[key].options.map(option => (
+                                            <option key={option} value={option}>{option}</option>
+                                        ))}
+                                    </select>
+                                ) : acceptedKeys[key].type === 'bool' ? (
                                     <input 
                                         type="checkbox" 
                                         checked={!!data[key]} 
@@ -161,6 +181,126 @@ function RecursiveJsonEditor({ data, onChange, setWarningMessage }) {
     );
 }
 
+const TrainingProgressBar = () => {
+    const [progress, setProgress] = useState(0);
+    const [remainingTime, setRemainingTime] = useState("Calculating...");
+    const [loss, setLoss] = useState(null);
+
+    useEffect(() => {
+        const socket = io(process.env.REACT_APP_API_HOST);
+
+        socket.on('training_progress', (data) => {
+            if (data.progress !== undefined) {
+                setProgress(data.progress);
+            }
+            if (data.remaining_time) {
+                setRemainingTime(data.remaining_time);
+            }
+            if (data.loss !== undefined) {
+                setLoss(data.loss);
+            }
+        });
+
+        return () => {
+            socket.disconnect();
+        };
+    }, []);
+
+    return (
+        <div style={{ width: '100%', padding: '20px' }}>
+            <div style={{ marginBottom: '10px', fontSize: '18px' }}>
+                <strong>Training Progress</strong>
+            </div>
+            <div style={{ position: 'relative', height: '30px', background: '#e0e0e0', borderRadius: '15px' }}>
+                <div
+                    style={{
+                        width: `${progress}%`,
+                        height: '100%',
+                        background: progress >= 100 ? '#4caf50' : 'rgba(75,192,192,1)',
+                        borderRadius: '15px',
+                        transition: 'width 0.5s ease-in-out',
+                    }}
+                />
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '0',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        color: '#fff',
+                        fontWeight: 'bold',
+                    }}
+                >
+                    {Math.round(progress)}%
+                </div>
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '16px' }}>
+                <div><strong>Estimated Remaining Time:</strong> {remainingTime}</div>
+                {loss !== null && (
+                    <div><strong>Current Loss:</strong> {loss.toFixed(4)}</div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const LossChart = () => {
+    const [lossData, setLossData] = useState([]);
+    const [epochData, setEpochData] = useState([]);
+
+    useEffect(() => {
+        const socket = io(process.env.REACT_APP_API_HOST);
+
+        socket.on('training_progress', (data) => {
+            if (data.loss !== undefined && data.epoch !== undefined) {
+                setLossData((prevLossData) => [...prevLossData, data.loss]);
+                setEpochData((prevEpochData) => [...prevEpochData, data.epoch]);
+            }
+        });
+
+        return () => {
+            socket.disconnect();
+        };
+    }, []);
+
+    const data = {
+        labels: epochData, // X-axis labels (Epochs)
+        datasets: [
+            {
+                label: 'Loss',
+                data: lossData, // Y-axis values (Loss)
+                fill: false,
+                backgroundColor: 'rgba(75,192,192,0.4)',
+                borderColor: 'rgba(75,192,192,1)',
+                tension: 0.1,
+            },
+        ],
+    };
+
+    const options = {
+        scales: {
+            x: {
+                title: {
+                    display: true,
+                    text: 'Epoch',
+                },
+            },
+            y: {
+                title: {
+                    display: true,
+                    text: 'Loss',
+                },
+                beginAtZero: true,
+            },
+        },
+    };
+
+    return (
+        <div style={{ width: '100%', height: '300px' }}>
+            <Line data={data} options={options} />
+        </div>
+    );
+};
 
 function VA_API() {
     const [currentStep, setCurrentStep] = useState(1);
@@ -287,13 +427,18 @@ function VA_API() {
     
         saveConfig(selectedDataset, savedDir, configData, isSameDirectory)
             .then((configPath) => {
-                const closeEventSource = startEventSource(configPath, setLogs, setIsTrain);
-                return closeEventSource;
+                const closeWebSocketConnection = startWebSocketConnection(configPath, setLogs, setIsTrain);
+                return closeWebSocketConnection;
             })
             .catch((error) => {
                 console.error('Error during the training process:', error);
                 setIsTrain(false);
             });
+    }
+
+    function stopTraining() {
+        stopTrainingSocket();
+        setIsTrain(false);
     }
 
     // next button: disabled
@@ -478,17 +623,24 @@ function VA_API() {
                                 </button>
                             </div>
                         )}
-                        {currentStep === 4 && (
+                        {currentStep === 4 && !isTrain ? (
                             <button 
                             className="btn btn-success flex-grow-1 ms-3"
                             onClick={startTraining}
                             disabled={isTrain}
                             >Train</button>
+                        ) : currentStep === 4 && isTrain && (
+                            <button
+                            className="btn btn-danger flex-grow-1 ms-3"
+                            onClick={stopTraining}
+                            >
+                                Stop Training
+                            </button>
                         )}
                     </div>
                 </div>
 
-                <div className="col-md-6 video-list">
+                <div className={`col-md-6 ${currentStep <= 3 ? 'video-list' : ''}`}  style={{ height: '30vh' }}>
                     <div className="row w-100">
                             {currentStep <= 3 && videos.map((video, index) => (
                                 <li key={index} className="list-group-item">
@@ -506,8 +658,11 @@ function VA_API() {
                             ))}
                             {currentStep === 4 && (
                                 <div className="logs w-100" id="logs">
+                                    <TrainingProgressBar />
+                                    <LossChart />
+
                                     <h5>Training Logs:</h5>
-                                    <pre>
+                                    <pre style={{ overflowY: 'auto', maxHeight: '300px' }}>
                                         {logs}
                                     </pre>
                                 </div>

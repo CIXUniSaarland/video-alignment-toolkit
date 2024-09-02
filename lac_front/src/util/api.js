@@ -1,4 +1,5 @@
 import React from "react";
+import io from 'socket.io-client';
 
 const fetchDatasets = async () => {
     try {
@@ -108,6 +109,65 @@ const startEventSource = (configPath, setLogs, setIsTrain) => {
     return () => eventSource.close();
 };
 
+const startWebSocketConnection = (config, setLogs, setIsTrain) => {
+    const socket = io(process.env.REACT_APP_API_HOST);
+
+    socket.on('training_progress', (data) => {
+        if (data.data) {
+            setLogs((prevLogs) => prevLogs + '\n' + data.data);
+        }
+
+        if (data.match) {
+            
+        }
+
+        if (data.error) {
+            setIsTrain(false);
+        }
+    });
+
+    fetch(`${process.env.REACT_APP_API_HOST}/train`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ config }),
+    })
+    .then((response) => response.json())
+    .then((data) => {
+        console.log(data.message);
+        if (data.error) {
+            setIsTrain(false);
+            socket.disconnect(); // Disconnect socket if there's an error
+        } else {
+            setIsTrain(true);
+        }
+    })
+    .catch((error) => {
+        console.error('Failed to start training:', error);
+        setIsTrain(false);
+        socket.disconnect(); // Disconnect socket if there's an error
+    });
+
+    return () => socket.disconnect(); // Cleanup on unmount
+};
+
+const stopTrainingSocket = () => {
+    fetch(`${process.env.REACT_APP_API_HOST}/stop_training`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+    })
+    .then((response) => response.json())
+    .then((data) => {
+        console.log(data.message);
+    })
+    .catch((error) => {
+        console.error('Failed to stop training:', error);
+    });
+}
+
 const getDefaultConfig = async () => {
     try {
         const response = await fetch(`${process.env.REACT_APP_API_HOST}/get_default_config`, {
@@ -137,5 +197,7 @@ export {
     fetchVideoDurations,
     saveConfig,
     startEventSource,
-    getDefaultConfig
+    getDefaultConfig,
+    startWebSocketConnection,
+    stopTrainingSocket
 };

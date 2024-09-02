@@ -1,16 +1,22 @@
 import json
 from flask import Flask, Response, request, jsonify, stream_with_context, send_from_directory
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit
 import subprocess
 import os
 import glob
-from datetime import datetime
+from datetime import datetime, timedelta
+import re
 
 from loguru import logger
 from moviepy.editor import VideoFileClip
 
 app = Flask(__name__)
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Training process
+training_process = None
 
 @app.route('/')
 def hello():
@@ -92,18 +98,106 @@ def save_config():
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
 
+# @app.route('/train', methods=['POST'])
+# def train():
+#     try:
+#         data = request.get_json()
+#         logger.info(f"[POST /train] Request received with data: {data}")
+#         config = data['config']
+#         args = f"--config='{config}'"
+        
+#         command = f"source ~/anaconda3/etc/profile.d/conda.sh && conda activate carl && python train.py {args}"
+#         subprocess.run(command, shell=True, check=True, executable='/bin/bash')
+        
+#         return jsonify({'message': 'success'})
+#     except Exception as e:
+#         return jsonify({'message': 'error', 'error': str(e)})
+    
 @app.route('/train', methods=['POST'])
 def train():
+    global training_process
     try:
         data = request.get_json()
         logger.info(f"[POST /train] Request received with data: {data}")
         config = data['config']
         args = f"--config='{config}'"
         
-        command = f"source ~/anaconda3/etc/profile.d/conda.sh && conda activate carl && python train.py {args}"
-        subprocess.run(command, shell=True, check=True, executable='/bin/bash')
+        # Use subprocess.Popen instead of subprocess.run to non-blockingly handle the process
+        training_process = subprocess.Popen(
+            f"source ~/anaconda3/etc/profile.d/conda.sh && conda activate carl && python train.py {args}",
+            shell=True, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, 
+            executable='/bin/bash'
+        )
+
+        loss_list = []
+
+        def stream_process(process):
+            for line in iter(process.stdout.readline, b''):
+                line_decoded = line.decode().strip()
+                logger.info(line_decoded)
+
+                match = re.match(r"Epoch: (\d+) / (\d+), Loss: ([\d\.]+), Time: (.+)", line_decoded)
+                if match:
+                    logger.info("Matched")
+                    epoch = int(match.group(1))
+                    total_epochs = int(match.group(2))
+                    loss = float(match.group(3))
+                    time_elapsed = match.group(4) 
+                    time_elapsed_obj = datetime.strptime(time_elapsed, "%H:%M:%S.%f") - datetime.strptime("00:00:00.0", "%H:%M:%S.%f")
+
+                    progress = (epoch / total_epochs) * 100
+                    if progress > 0:
+                        # Calculate remaining time
+                        estimated_total_time = time_elapsed_obj / (progress / 100)
+                        remaining_time = estimated_total_time - time_elapsed_obj
+
+                        remaining_time = str(remaining_time).split(".")[0]
+                    else:
+                        remaining_time = "Calculating..."
+
+                    loss_list.append(loss)
+
+                    socketio.emit('training_progress', {
+                        'data': line_decoded,
+                        'match': True,
+                        'epoch': epoch,
+                        'loss': loss,
+                        'loss_list': loss_list,
+                        'time': time_elapsed,
+                        'progress': progress,
+                        'remaining_time': remaining_time
+                    })
+                else:
+                    socketio.emit('training_progress', {'data': line_decoded})
+
+            process.stdout.close()
+            return_code = process.wait()
+            if return_code == 0:
+                socketio.emit('training_progress', {'data': 'Training completed successfully.'})
+            else:
+                socketio.emit('training_progress', {'data': 'Error in training process.', 'error': True})
         
-        return jsonify({'message': 'success'})
+        from threading import Thread
+        thread = Thread(target=stream_process, args=(training_process,))
+        thread.start()
+
+        return jsonify({'message': 'Training started'})
+    except Exception as e:
+        logger.exception("Failed to start training process.")
+        return jsonify({'message': 'error', 'error': str(e)})
+    
+@app.route('/stop_training', methods=['GET'])
+def stop_training():
+    global training_process
+    try:
+        if training_process:
+            training_process.terminate()
+            training_process = None
+            return jsonify({'message': 'Training stopped'})
+        else:
+            return jsonify({'message': 'No training process to stop'})
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
     
@@ -270,4 +364,5 @@ def get_model_options():
         return jsonify({'message': 'error', 'error': str(e)})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    # app.run(debug=True, port=5001)
+    socketio.run(app, debug=True, port=5001)

@@ -94,6 +94,9 @@ def train(cfg, train_loader, train_eval_loader=None, val_eval_loader=None):
         scaler = torch.cuda.amp.GradScaler()
         logger.info("Using AMP")
 
+    time_start = datetime.now()
+    print(f"Start time: {time_start}")
+
     for epoch in tqdm(range(last_epoch, last_epoch+cfg.trainer.epochs)):
         avg_loss = 0
         
@@ -144,6 +147,7 @@ def train(cfg, train_loader, train_eval_loader=None, val_eval_loader=None):
         scheduler.step()
 
         logger.info(f"Epoch: {epoch}, Loss: {avg_loss}")
+        print(f"Epoch: {epoch} / {cfg.trainer.epochs}, Loss: {avg_loss}, Time: {datetime.now() - time_start}")
 
         writer.add_scalar('train/lr', [param_group["lr"] for param_group in optimizer.param_groups][0], epoch)
         writer.add_scalar('train/loss', avg_loss, epoch)
