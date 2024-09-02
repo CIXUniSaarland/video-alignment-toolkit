@@ -70,6 +70,8 @@ if __name__ == '__main__':
 
     video1 = read_video(video1_path)
     video2 = read_video(video2_path)
+    logger.info(f"Video1 shape: {video1.shape}")
+    logger.info(f"Video2 shape: {video2.shape}")
 
     video1_name = os.path.splitext(os.path.basename(args.video1))[0]
     video2_name = os.path.splitext(os.path.basename(args.video2))[0]
@@ -85,41 +87,66 @@ if __name__ == '__main__':
     logger.info(f"Output directory: {outdir}")
     os.makedirs(outdir, exist_ok=True)
 
-    if os.path.exists(embedding_path1) and os.path.exists(embedding_path2):
-        logger.info(f"Embedding files for {video1_name} and {video2_name} already exist.")
+    if os.path.exists(embedding_path1):
+        logger.info(f"Embedding file for {video1_name} already exists.")
         # get embeddings
         embs1 = np.load(embedding_path1)
+    else:
+        frames1 = torch.from_numpy(video1).float()
+        frames1 = frames1.cuda()
+        frames1 = frames1.permute(0, 3, 1, 2)
+
+        with torch.no_grad():
+            embs1 = model(frames1.unsqueeze(0), num_context=1)
+            embs1 = embs1.squeeze(0)
+            np.save(embedding_path1, embs1.cpu().numpy())
+            logger.success(f"Embedding saved to {embedding_path1}")
+
+    if os.path.exists(embedding_path2):
+        logger.info(f"Embedding file for {video2_name} already exists.")
+        # get embeddings
         embs2 = np.load(embedding_path2)
+    else:
+        frames2 = torch.from_numpy(video2).float()
+        frames2 = frames2.cuda()
+        frames2 = frames2.permute(0, 3, 1, 2)
 
-        video_out_path = os.path.join(outdir, f"{video1_name}_{video2_name}/vid.mp4")
-        os.makedirs(os.path.join(outdir, f"{video1_name}_{video2_name}"), exist_ok=True)
+        with torch.no_grad():
+            embs2 = model(frames2.unsqueeze(0), num_context=1)
+            embs2 = embs2.squeeze(0)
+            np.save(embedding_path2, embs2.cpu().numpy())
+            logger.success(f"Embedding saved to {embedding_path2}")
 
-        # check if video exist, if not create_dynamic_video
-        if not os.path.exists(video_out_path):
-            create_dynamic_video(embs=[embs1, embs2], frames=[video1, video2], video_path=video_out_path, use_dtw=True)
-            logger.success(f"Dynamic video created at {video_out_path}")
+    video_out_path = os.path.join(outdir, f"{video1_name}_{video2_name}/vid.mp4")
+    os.makedirs(os.path.join(outdir, f"{video1_name}_{video2_name}"), exist_ok=True)
 
-        output_path = os.path.join(outdir, f"{video1_name}_{video2_name}/data.json")
-        if not os.path.exists(output_path):
-            d, cost_mat, acc_cost_mat, path = dtw(embs1, embs2, dist=dist_fn)
-            path = torch.tensor(path)
+    # check if video exist, if not create_dynamic_video
+    if not os.path.exists(video_out_path):
+        create_dynamic_video(embs=[embs1, embs2], frames=[video1, video2], video_path=video_out_path, use_dtw=True)
+        logger.success(f"Dynamic video created at {video_out_path}")
 
-            normalized_acc_cost_mat = acc_cost_mat / acc_cost_mat.max()
-            normalized_acc_cost_mat = [[float(f"{x:.3f}") for x in y] for y in normalized_acc_cost_mat.tolist()]
+    output_path = os.path.join(outdir, f"{video1_name}_{video2_name}/data.json")
+    d, cost_mat, acc_cost_mat, path = dtw(embs1, embs2, dist=dist_fn)
+    path = torch.tensor(path)
 
-            data = {
-                "v1": video1_name,
-                "v2": video2_name,
-                "path": path.T.tolist(),
-                "acc_cost_mat": normalized_acc_cost_mat,
-                "dtw_cost": d
-            }
-            with open(output_path, 'w') as f:
-                json.dump(data, f)
-            logger.success(f"Data saved to {output_path}")
-            
-        data = json.load(open(output_path))
-        print(json.dumps(data))
+    normalized_acc_cost_mat = acc_cost_mat / acc_cost_mat.max()
+    normalized_acc_cost_mat = [[float(f"{x:.3f}") for x in y] for y in normalized_acc_cost_mat.tolist()]
+
+    data = {
+        "v1": video1_name,
+        "v2": video2_name,
+        "v1_shape": video1.shape,
+        "v2_shape": video2.shape,
+        "path": path.T.tolist(),
+        "acc_cost_mat": normalized_acc_cost_mat,
+        "dtw_cost": d
+    }
+    with open(output_path, 'w') as f:
+        json.dump(data, f)
+    logger.success(f"Data saved to {output_path}")
+        
+    data = json.load(open(output_path))
+    print(json.dumps(data))
         
 
 
