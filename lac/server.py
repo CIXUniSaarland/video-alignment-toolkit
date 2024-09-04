@@ -1,5 +1,5 @@
 import json
-from flask import Flask, Response, request, jsonify, stream_with_context, send_from_directory
+from flask import Flask, Response, request, jsonify, stream_with_context, send_from_directory, url_for
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import subprocess
@@ -14,6 +14,8 @@ from loguru import logger
 from moviepy.editor import VideoFileClip
 
 from dataset.util import read_video
+from serverapi.frame_retr import frame_retr
+from serverapi.align import align
 
 app = Flask(__name__)
 CORS(app)
@@ -28,6 +30,13 @@ def hello():
 
 @app.route('/list_datasets', methods=['GET'])
 def list_datasets():
+    '''
+    Retrieves a list of datasets available in the specified directory.
+    Request:
+        GET /list_datasets
+    Returns:
+        A JSON response containing the list of datasets.
+    '''
     try:
         datasets_dir = '../datasets/'
         datasets = [name for name in os.listdir(datasets_dir) if os.path.isdir(os.path.join(datasets_dir, name))]
@@ -37,6 +46,16 @@ def list_datasets():
     
 @app.route('/list_videos', methods=['POST'])
 def list_videos():
+    '''
+    Retrieves a list of videos from a specified dataset.
+    Request:
+        POST /list_videos
+        {
+            "dataset": "dataset_name"
+        }
+    Returns:
+        A JSON response containing the list of videos and a success message.
+    '''
     try:
         data = request.get_json()
         logger.info(f"[POST /list_videos] Request received with data: {data}")
@@ -49,6 +68,17 @@ def list_videos():
     
 @app.route('/get_video_durations', methods=['POST'])
 def get_video_durations():
+    '''
+    Retrieves the durations of the specified videos from a dataset.
+    Request:
+        POST /get_video_durations
+        {
+            "videos": ["video1.mp4", "video2.mp4"],
+            "dataset": "dataset_name"
+        }
+    Returns:
+        A JSON response containing the durations of the videos.
+    '''
     try:
         data = request.get_json()
         videos = data['videos']
@@ -71,6 +101,18 @@ def get_video_durations():
 
 @app.route('/save_config', methods=['POST'])
 def save_config():
+    """
+    Save the configuration data received from a POST request.
+    Request:
+        POST /save_config
+        {
+            "config": "config",
+            "saved_dir": "saved_dir",
+        }
+    Returns:
+        A JSON response containing the success message, configuration path, 
+        configuration directory, and whether the same directory flag is set.
+    """
     try:
         data = request.get_json()
         logger.info(f"[POST /save_config] Request received with data: {data}")
@@ -119,6 +161,16 @@ def save_config():
     
 @app.route('/train', methods=['POST'])
 def train():
+    """
+    Start the training process using the configuration data received from a POST request.
+    Request:
+        POST /train
+        {
+            "config": "config"
+        }
+    Returns:
+        A JSON response containing the success message.
+    """
     global training_process
     try:
         data = request.get_json()
@@ -194,6 +246,13 @@ def train():
     
 @app.route('/stop_training', methods=['GET'])
 def stop_training():
+    """
+    Stop the training process.
+    Request:
+        GET /stop_training
+    Returns:
+        A JSON response containing the success message.
+    """
     global training_process
     try:
         if training_process:
@@ -206,6 +265,13 @@ def stop_training():
         return jsonify({'message': 'error', 'error': str(e)})
     
 def generate_logs(command):
+    """
+    Generate logs from the specified command.
+    Args:
+        command (str): The command to execute.
+    Yields:
+        str: The log data.
+    """
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, executable='/bin/bash')
     for line in iter(process.stdout.readline, b''):
         yield f"data: {line.decode('utf-8')}\n\n"
@@ -226,44 +292,19 @@ def train_sse():
 
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
-
-@app.route('/extract_embeddings', methods=['POST'])
-def extract_embeddings():
-    try:
-        data = request.get_json()
-        logger.info(f"[POST /extract_embeddings] Request received with data: {data}")
-        config = data['config']
-        outdir = data['directory']
-        args = f"--config='{config}' --outdir='{outdir}'"
-        
-        command = f"source ~/anaconda3/etc/profile.d/conda.sh && conda activate carl && python server/extract_embed.py {args}"
-        subprocess.run(command, shell=True, check=True, executable='/bin/bash')
-        
-        return jsonify({'message': 'success'})
-    except Exception as e:
-        return jsonify({'message': 'error', 'error': str(e)})
-
-@app.route('/check_embeddings', methods=['POST'])
-def check_embeddings():
-    try:
-        data = request.get_json()
-        logger.info(f"[POST /check_embeddings] Request received with data: {data}")
-        directory = data['directory']
-        videos = data['videos']
-        embeddings_dir = f'{directory}/embeddings'
-        
-        embeddings = {}
-        for video in videos:
-            video_name = os.path.splitext(video)[0]
-            embedding_path = os.path.join(embeddings_dir, f'{video_name}.npy')
-            embeddings[video] = os.path.exists(embedding_path)
-        
-        return jsonify({'message': 'success', 'embeddings': embeddings})
-    except Exception as e:
-        return jsonify({'message': 'error', 'error': str(e)})
     
 @app.route('/list_folders', methods=['POST'])
 def list_folders():
+    """
+    List folders in the specified directory.
+    Request:
+        POST /list_folders
+        {
+            "directory": "directory"
+        }
+    Returns:
+        A JSON response containing the list of folders and folders with config.
+    """
     try:
         data = request.get_json()
         logger.info(f"[POST /list_folders] Request received with data: {data}")
@@ -278,21 +319,122 @@ def list_folders():
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
     
-@app.route('/get_video', methods=['POST'])
+@app.route('/get_video', methods=['GET', 'POST'])
 def get_video():
+    """
+    Retrieve the specified video file.
+    Request:
+        GET /get_video?dataset=dataset&video=video
+        POST /get_video
+        {
+            "dataset": "dataset",
+            "video": "video"
+        }
+    Returns:
+        The video file.
+    """
+    try:
+        if request.method == 'POST':
+            # Handle POST request
+            data = request.get_json()
+            if not data or 'dataset' not in data or 'video' not in data:
+                return jsonify({'message': 'error', 'error': 'Invalid request payload'}), 400
+            
+            dataset = data['dataset']
+            video = data['video']
+        
+        elif request.method == 'GET':
+            # Handle GET request
+            dataset = request.args.get('dataset')
+            video = request.args.get('video')
+            if not dataset or not video:
+                return jsonify({'message': 'error', 'error': 'Missing dataset or video parameter'}), 400
+
+        # Common path for both GET and POST
+        video_path = os.path.join('..', 'datasets', dataset, 'videos')
+
+        if not os.path.exists(os.path.join(video_path, video)):
+            return jsonify({'message': 'error', 'error': 'Video file not found'}), 404
+
+        return send_from_directory(video_path, video, mimetype='video/mp4')
+        
+    except Exception as e:
+        return jsonify({'message': 'error', 'error': str(e)}), 500
+    
+@app.route('/get_videos', methods=['POST'])
+def get_videos():
+    """
+    Retrieve the specified video files.
+    Request:
+        POST /get_videos
+        {
+            "dataset": "dataset",
+            "videos": ["video1", "video2"]
+        }
+    Returns:
+        A JSON response containing the video GET URLs (above).
+    """
     try:
         data = request.get_json()
-        logger.info(f"[POST /get_video] Request received with data: {data}")
+        logger.info(f"[POST /get_videos] Request received with data: {data}")
+        dataset = data['dataset']
+        videos = data['videos'] # list of video names
+        video_path = f'../datasets/{dataset}/videos/'
+
+        video_urls = []
+        for video in videos:
+            full_path = os.path.join(video_path, video)
+            if os.path.exists(full_path):
+                video_url = url_for('get_video', dataset=dataset, video=video)
+                video_urls.append(video_url)
+            else:
+                return jsonify({'message': 'error', 'error': f"Video {video} not found."})
+        
+        return jsonify({'message': 'success', 'video_urls': video_urls})
+    except Exception as e:
+        return jsonify({'message': 'error', 'error': str(e)})
+    
+@app.route('/get_video_framerate', methods=['POST'])
+def get_video_framerate():
+    """
+    Retrieve the frame rate of the specified video.
+    Request:
+        POST /get_video_framerate
+        {
+            "dataset": "dataset",
+            "video": "video"
+        }
+    Returns:
+        A JSON response containing the frame rate of the video.
+    """
+    try:
+        data = request.get_json()
+        logger.info(f"[POST /get_video_framerate] Request received with data: {data}")
         dataset = data['dataset']
         video = data['video']
-        video_path = f'../datasets/{dataset}/videos/'
-        return send_from_directory(video_path, video)
-        
+        video_path = f'../datasets/{dataset}/videos/{video}'
+        clip = VideoFileClip(video_path)
+        # test = read_video(video_path)
+        # logger.info(f"Test: {test.shape}")
+        return jsonify({'message': 'success', 'frame_rate': clip.fps})
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
     
 @app.route('/align_videos', methods=['POST'])
 def align_videos():
+    """
+    Align two videos based on dynamic time warping.
+    Request:
+        POST /align_videos
+        {
+            "dataset": "dataset",
+            "video1": "video1",
+            "video2": "video2",
+            "directory": "directory"
+        }
+    Returns:
+        A JSON response containing the success message and the alignment data.
+    """
     try:
         data = request.get_json()
         logger.info(f"[POST /align_videos] Request received with data: {data}")
@@ -300,23 +442,26 @@ def align_videos():
         video1 = data['video1']
         video2 = data['video2']
         directory = data['directory']
-        args = f"--dataset='{dataset}' --video1='{video1}' --video2='{video2}' --directory='{directory}'"
         
-        command = f"source ~/anaconda3/etc/profile.d/conda.sh && conda activate carl && python server/align.py {args}"
-        result = subprocess.run(command, 
-                       shell=True, 
-                       check=True, 
-                       executable='/bin/bash',
-                       capture_output=True,
-                       text=True)
-        output_json = json.loads(result.stdout)
-        
-        return jsonify({'message': 'success', 'result': output_json})
+        data = align(dataset, directory, video1, video2)
+        return jsonify({'message': 'success', 'result': data})
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
     
 @app.route('/get_frame', methods=['POST'])
 def get_frame():
+    """
+    Retrieve the specified frame from the video.
+    Request:
+        POST /get_frame
+        {
+            "dataset": "dataset",
+            "video": "video",
+            "frame": "frame"
+        }
+    Returns:
+        The frame image.
+    """
     try:
         data = request.get_json()
         logger.info(f"[POST /get_frame] Request received with data: {data}")
@@ -337,6 +482,20 @@ def get_frame():
     
 @app.route('/frame_retrieval', methods=['POST'])
 def frame_retrieval():
+    """
+    Retrieve the specified frame from the video.
+    Request:
+        POST /frame_retrieval
+        {
+            "dataset": "dataset",
+            "video1": "video1",
+            "video2": "video2",
+            "frame1": "frame1",
+            "directory": "directory"
+        }
+    Returns:
+        A JSON response containing the success message and the frame retrieval data.
+    """
     try:
         data = request.get_json()
         logger.info(f"[POST /frame_retrieval] Request received with data: {data}")
@@ -345,25 +504,23 @@ def frame_retrieval():
         video2 = data['video2']
         frame1 = data['frame1']
         directory = data['directory']
-        args = f"--dataset='{dataset}' --video1='{video1}' --video2='{video2}' --video1_frame={frame1} --directory='{directory}'"
+        
+        data = frame_retr(dataset, directory, video1, frame1, video2)
 
-        command = f"source ~/anaconda3/etc/profile.d/conda.sh && conda activate carl && python server/frame_retr.py {args}"
-        result = subprocess.run(command, 
-                                shell=True, 
-                                check=True, 
-                                executable='/bin/bash', 
-                                capture_output=True, 
-                                text=True)
-
-        output_json = json.loads(result.stdout)
-
-        return jsonify({'message': 'success', 'result': output_json})
+        return jsonify({'message': 'success', 'result': data })
     
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
     
 @app.route('/get_default_config', methods=['GET'])
 def get_default_config():
+    """
+    Get the default configuration for the training process.
+    Request:
+        GET /get_default_config
+    Returns:
+        A JSON response containing the default configuration.
+    """
     try:
         config_path = 'config/pouring/lac.json'
         with open(config_path, 'r') as f:
@@ -374,6 +531,16 @@ def get_default_config():
     
 @app.route('/get_model_options', methods=['POST'])
 def get_model_options():
+    """
+    Get the available models in the specified working directory.
+    Request:
+        POST /get_model_options
+        {
+            "working_dir": "working_dir"
+        }
+    Returns:
+        A JSON response containing the available models.
+    """
     try:
         data = request.get_json()
         logger.info(f"[POST /get_model_options] Request received with data: {data}")

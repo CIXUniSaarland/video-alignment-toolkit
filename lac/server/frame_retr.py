@@ -3,7 +3,7 @@ import random
 import sys
 import argparse
 import os
-sys.path.insert(1, '/home/cix-desktop-2/Documents/k/thesis-tmp')
+sys.path.insert(1, '../')
 
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -20,7 +20,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
-# from dtw import dtw
+from dtw import dtw
 from matplotlib.animation import FuncAnimation
 from scipy.spatial.distance import cdist
 from dataset import construct_eval_loader
@@ -30,7 +30,8 @@ from loguru import logger
 
 from easydict import EasyDict
 from model.model import *
-from util import *
+from types import SimpleNamespace
+from serverapi.util import *
 
 import json
 from tqdm import tqdm
@@ -43,70 +44,118 @@ model_dict = {
     "ResNet50_Transformer2": ResNet50_Transformer2,
 }
 
-if __name__ == '__main__':
-    args = argparse.ArgumentParser(description='Training')
-    args.add_argument('-ds', '--dataset', default=None, type=str, required=True,)
-    args.add_argument('-dr', '--directory', default=None, type=str, required=True,)
-    args.add_argument('-v1', '--video1', default=None, type=str, required=True)
-    args.add_argument('-v1f', '--video1_frame', default=None, type=int, required=True)
-    args.add_argument('-v2', '--video2', default=None, type=str, required=True)
-    args.add_argument('-d', '--device', default="cuda", type=str,
-                        help='indices of GPUs to enable (default: all)')
-    args.add_argument('-n', '--name', default=None, type=str, help='name of the experiment')
-    
-    args = args.parse_args()
+def frame_retr(dataset, directory, video1, queryframe1, video2, device="cuda", name=""):
+    args = {
+        'dataset': dataset,
+        'directory': directory,
+        'video1': video1,
+        'queryframe1': queryframe1,
+        'video2': video2,
+        'device': device,
+        'name': name,
+    }
+    logger.info(f"Start Frame Retrieval with args: {args}")
+    args = SimpleNamespace(**args)
     args.config = args.directory + '/config.json'
     cfg = parser.load_config(args)
     cfg = EasyDict(cfg)
 
-    logger.info("Start extract embedding...")
-
-    model = model_dict[cfg.arch.type](cfg)
-    model = model.cuda()
-    model, _, _ = load_ckpt(cfg, model, None)
-    model.eval()
+    # check if outdr exist, if not create it
+    outdir = args.directory + '/output'
+    os.makedirs(outdir, exist_ok=True)
     
     dataset_path = os.path.join("../datasets", args.dataset)
     video1_path = os.path.join(dataset_path, 'videos', args.video1)
     video2_path = os.path.join(dataset_path, 'videos', args.video2)
-
-    video1 = read_video(video1_path)
-    video2 = read_video(video2_path)
-
     video1_name = os.path.splitext(os.path.basename(args.video1))[0]
     video2_name = os.path.splitext(os.path.basename(args.video2))[0]
+    os.makedirs(os.path.join(outdir, f"{video1_name}_{video2_name}"), exist_ok=True)
+    output_path = os.path.join(outdir, f"{video1_name}_{video2_name}/data.json")
 
-    # check embedding exist or not
-    embeddings_dir = os.path.join(args.directory, 'embeddings')
-    os.makedirs(embeddings_dir, exist_ok=True)
-    embedding_path1 = os.path.join(embeddings_dir, f'{video1_name}.npy')
-    embedding_path2 = os.path.join(embeddings_dir, f'{video2_name}.npy')
+    def dist_fn(x, y):
+        x = torch.tensor(x) if not isinstance(x, torch.Tensor) else x
+        y = torch.tensor(y) if not isinstance(y, torch.Tensor) else y
+        dist = torch.sum((x - y) ** 2)
+        return dist
 
-    # check if outdr exist, if not create it
-    outdir = args.directory + '/output'
-    logger.info(f"Output directory: {outdir}")
-    os.makedirs(outdir, exist_ok=True)
+    # if the data file already exists, return it
+    if os.path.exists(output_path):
+        logger.info(f"Data file already exists at {output_path}")
+        data = json.load(open(output_path))
+        path = data['path']
 
-    if os.path.exists(embedding_path1) and os.path.exists(embedding_path2):
-        logger.info(f"Embedding files for {video1_name} and {video2_name} already exist.")
-        # get embeddings
-        embs1 = np.load(embedding_path1)
-        embs2 = np.load(embedding_path2)
+    else:
+        model = model_dict[cfg.arch.type](cfg)
+        model = model.cuda()
+        model, _, _ = load_ckpt(cfg, model, None)
+        model.eval()
 
-        video_out_path = os.path.join(outdir, f"{video1_name}_{video2_name}/vid.mp4")
-        os.makedirs(os.path.join(outdir, f"{video1_name}_{video2_name}"), exist_ok=True)
-        
-        # get the frame retrieval
-        query_embeddings = embs1[args.video1_frame]
-        dist = cdist([query_embeddings], embs2, metric='cosine')
-        # get closest 5 frames
-        closest_frames = np.argsort(dist[0])[:5]
-        logger.info(f"Closest frames: {closest_frames}")
-        frame_retrieval = np.argmin(dist)
-        logger.info(f"Frame retrieval: {frame_retrieval}")
+        # check embedding exist or not
+        embeddings_dir = os.path.join(args.directory, 'embeddings')
+        os.makedirs(embeddings_dir, exist_ok=True)
+        embedding_path1 = os.path.join(embeddings_dir, f'{video1_name}.npy')
+        embedding_path2 = os.path.join(embeddings_dir, f'{video2_name}.npy')
 
-        result = {
-            'closest_frames': closest_frames.tolist(),
-            'frame_retrieval': int(frame_retrieval)
+        if os.path.exists(embedding_path1):
+            logger.info(f"Embedding file for {video1_name} already exists.")
+            embs1 = np.load(embedding_path1)
+        else:
+            video1 = read_video(video1_path)
+            frames1 = torch.from_numpy(video1).float()
+            frames1 = frames1.cuda()
+            frames1 = frames1.permute(0, 3, 1, 2)
+
+            with torch.no_grad():
+                embs1 = model(frames1.unsqueeze(0), num_context=1)
+                embs1 = embs1.squeeze(0)
+                np.save(embedding_path1, embs1.cpu().numpy())
+                logger.success(f"Embedding saved to {embedding_path1}")
+
+        if os.path.exists(embedding_path2):
+            logger.info(f"Embedding file for {video2_name} already exists.")
+            embs2 = np.load(embedding_path2)
+        else:
+            video2 = read_video(video2_path)
+            frames2 = torch.from_numpy(video2).float()
+            frames2 = frames2.cuda()
+            frames2 = frames2.permute(0, 3, 1, 2)
+
+            with torch.no_grad():
+                embs2 = model(frames2.unsqueeze(0), num_context=1)
+                embs2 = embs2.squeeze(0)
+                np.save(embedding_path2, embs2.cpu().numpy())
+                logger.success(f"Embedding saved to {embedding_path2}")
+    
+        d, cost_mat, acc_cost_mat, path = dtw(embs1, embs2, dist=dist_fn)
+        path = torch.tensor(path)
+
+        normalized_acc_cost_mat = acc_cost_mat / acc_cost_mat.max()
+        normalized_acc_cost_mat = [[float(f"{x:.3f}") for x in y] for y in normalized_acc_cost_mat.tolist()]
+
+        path = path.T.tolist()
+
+        data = {
+            "v1": video1_name,
+            "v2": video2_name,
+            "path": path,
+            "acc_cost_mat": normalized_acc_cost_mat,
+            "dtw_cost": d
         }
-        print(json.dumps(result))
+
+        with open(output_path, 'w') as f:
+            json.dump(data, f)
+            logger.success(f"Data saved to {output_path}")
+    
+    closest_frames = []
+    # closest to video1_frame
+    for query_frame in queryframe1:
+        for i in range(len(path)):
+            if path[i][0] == query_frame:
+                closest_frames.append(path[i][1])
+                continue
+    
+    result = {
+        'closest_frames': closest_frames,
+    }
+
+    return result
