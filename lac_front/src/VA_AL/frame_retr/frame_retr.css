@@ -1,0 +1,19 @@
+.video-checkboxes {
+    width: 100% !important;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.video-card {
+    border: 1px solid #ccc;
+}
+
+.video-card .btn-link {
+    text-decoration: none;
+    color: #007bff;
+}
+
+.video-card .btn-link:hover {
+    text-decoration: underline;
+    color: #0056b3;
+}
