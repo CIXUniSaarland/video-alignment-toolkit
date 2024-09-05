@@ -393,12 +393,13 @@ def get_videos():
         return jsonify({'message': 'success', 'video_urls': video_urls})
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
-    
-@app.route('/get_video_framerate', methods=['POST'])
+
+@app.route('/get_video_framerate', methods=['GET', 'POST'])
 def get_video_framerate():
     """
     Retrieve the frame rate of the specified video.
     Request:
+        GET /get_video_framerate?dataset=dataset&video=video
         POST /get_video_framerate
         {
             "dataset": "dataset",
@@ -408,17 +409,25 @@ def get_video_framerate():
         A JSON response containing the frame rate of the video.
     """
     try:
-        data = request.get_json()
-        logger.info(f"[POST /get_video_framerate] Request received with data: {data}")
-        dataset = data['dataset']
-        video = data['video']
+        if request.method == 'POST':
+            data = request.get_json()
+            logger.info(f"[POST /get_video_framerate] Request received with data: {data}")
+            dataset = data['dataset']
+            video = data['video']
+        elif request.method == 'GET':
+            dataset = request.args.get('dataset')
+            video = request.args.get('video')
+            if not dataset or not video:
+                return jsonify({'message': 'error', 'error': 'Missing dataset or video parameter'}), 400
+
         video_path = f'../datasets/{dataset}/videos/{video}'
         clip = VideoFileClip(video_path)
-        # test = read_video(video_path)
-        # logger.info(f"Test: {test.shape}")
+        test = read_video(video_path)
+        logger.info(f"{video}: {test.shape}, {clip.fps}")
         return jsonify({'message': 'success', 'frame_rate': clip.fps})
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
+    
     
 @app.route('/align_videos', methods=['POST'])
 def align_videos():
