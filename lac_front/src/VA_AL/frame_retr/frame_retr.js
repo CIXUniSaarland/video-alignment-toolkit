@@ -10,6 +10,7 @@ import {
     fetchFolderList
  } from "../../util/api";
 import "./frame_retr.css";
+import { FullPageSpinner } from "../../Page/Page";
 
 function FrameRetrieval() {
     const breadcrumbItems = [
@@ -82,19 +83,16 @@ function FrameRetrieval() {
     };
 
     const toggleExpand = (e) => {
-        // const cardBody = e.target.nextElementSibling;
-        // if (cardBody.style.display === 'none') {
-        //     cardBody.style.display = 'block';
-        // } else {
-        //     cardBody.style.display = 'none';
-        // }
-
         const videoIndex = selectedVideos2.indexOf(e.target.innerText);
         const expanded = expandedVideos2[videoIndex];
-        const newExpanded = [...expandedVideos2];
-        newExpanded[videoIndex] = !expanded;
-        setExpandedVideos2(newExpanded);
-
+        if (expanded) {
+            const newExpanded = [...expandedVideos2];
+            newExpanded[videoIndex] = !expanded;
+            setExpandedVideos2(newExpanded);
+            return;
+        }
+        setIsLoading(true);
+        
         // if expanded
         if (!expanded) {
             const bframes = bookmarks.map(bookmark => bookmark.frame);
@@ -113,6 +111,7 @@ function FrameRetrieval() {
             })
             .then(response => response.json())
             .then(data => {
+                console.log("data:", data);
                 const newBookmarks = bookmarks.map(bookmark => ({ ...bookmark }));
                 for (let i = 0; i < newBookmarks.length; i++) {
                     newBookmarks[i].frame = data.result.closest_frames[i];
@@ -121,18 +120,22 @@ function FrameRetrieval() {
                 const updatedVideos2Bookmarks = [...videos2Bookmarks];
                 updatedVideos2Bookmarks[videoIndex] = newBookmarks;
                 setVideos2Bookmarks(updatedVideos2Bookmarks);
-                // console.log("New Bookmarks:", newBookmarks);
             })
             .catch(error => {
                 console.error("Error retrieving frames:", error);
             })
             .finally(() => {
+                const newExpanded = [...expandedVideos2];
+                newExpanded[videoIndex] = !expanded;
+                setExpandedVideos2(newExpanded);
+                setIsLoading(false);
             });
         }
     };
 
     return (
         <div className="w-100">
+            {isLoading && currentStep !== 2 && <FullPageSpinner />}
             <Breadcrumbs breadcrumbs={breadcrumbItems} />
             <h2>Frame Retrieval</h2>
 
@@ -326,6 +329,7 @@ function FrameRetrieval() {
                                             style={{ float: 'right' }}
                                         ></i>
                                     </div>
+
                                     <div className={`card-body ${expandedVideos2[index] ? 'expanded' : 'collapsed'}`}>
                                         <VideoPlayerBookmarkCard
                                         videoSrc={`${process.env.REACT_APP_API_HOST}${videoSrc}`} 
@@ -400,6 +404,7 @@ const VideoCheckboxes = ({ videos, selectedVideos, setSelectedVideos }) => {
         </div>
     );
 };
+
 
 
 export { FrameRetrieval };

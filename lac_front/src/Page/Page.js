@@ -64,4 +64,15 @@ function Page({PageComponent}) {
     );
 }
 
-export { Footer, Page };
+
+const FullPageSpinner = () => {
+    return (
+        <div className="spinner-custom">
+            <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    );
+};
+
+export { Footer, Page, FullPageSpinner };
