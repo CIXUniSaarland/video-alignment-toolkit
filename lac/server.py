@@ -16,6 +16,7 @@ from moviepy.editor import VideoFileClip
 from dataset.util import read_video
 from serverapi.frame_retr import frame_retr
 from serverapi.align import align
+from serverapi.anomaly_det import anomaly_det
 
 app = Flask(__name__)
 CORS(app)
@@ -560,6 +561,34 @@ def get_model_options():
             return jsonify({'message': 'error', 'error': f"Working directory {working_dir} does not exist."})
         models = os.listdir(model_working_dir)
         return jsonify({'message': 'success', 'models': models})
+    except Exception as e:
+        return jsonify({'message': 'error', 'error': str(e)})
+    
+@app.route('/detect_anomaly', methods=['POST'])
+def detect_anomaly():
+    """
+    Detect anomalies in the specified videos.
+    Request:
+        POST /detect_anomaly
+        {
+            "dataset": "dataset",
+            "video1": "video1",
+            "video2": "video2",
+            "directory": "directory"
+        }
+    Returns:
+        A JSON response containing the success message and the anomaly detection data.
+    """
+    try:
+        data = request.get_json()
+        logger.info(f"[POST /detect_anomaly] Request received with data: {data}")
+        dataset = data['dataset']
+        video1 = data['video1']
+        video2 = data['video2']
+        directory = data['directory']
+        
+        data = anomaly_det(dataset, directory, video1, video2)
+        return jsonify({'message': 'success', 'result': data})
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
 
