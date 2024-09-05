@@ -7,7 +7,6 @@ sys.path.insert(1, '../')
 
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-from sklearn.metrics.pairwise import cosine_similarity
 
 from model.tcn import TCN
 from model.tcc import TCC
@@ -86,9 +85,7 @@ def frame_retr(dataset, directory, video1, queryframe1, video2, device="cuda", n
 
     else:
         model = model_dict[cfg.arch.type](cfg)
-        model = model.cuda()
         model, _, _ = load_ckpt(cfg, model, None)
-        model.eval()
 
         # check embedding exist or not
         embeddings_dir = os.path.join(args.directory, 'embeddings')
@@ -96,13 +93,13 @@ def frame_retr(dataset, directory, video1, queryframe1, video2, device="cuda", n
         embedding_path1 = os.path.join(embeddings_dir, f'{video1_name}.npy')
         embedding_path2 = os.path.join(embeddings_dir, f'{video2_name}.npy')
 
+        video1 = read_video(video1_path)
+        video2 = read_video(video2_path)
         if os.path.exists(embedding_path1):
             logger.info(f"Embedding file for {video1_name} already exists.")
             embs1 = np.load(embedding_path1)
         else:
-            video1 = read_video(video1_path)
             frames1 = torch.from_numpy(video1).float()
-            frames1 = frames1.cuda()
             frames1 = frames1.permute(0, 3, 1, 2)
 
             with torch.no_grad():
@@ -115,9 +112,7 @@ def frame_retr(dataset, directory, video1, queryframe1, video2, device="cuda", n
             logger.info(f"Embedding file for {video2_name} already exists.")
             embs2 = np.load(embedding_path2)
         else:
-            video2 = read_video(video2_path)
             frames2 = torch.from_numpy(video2).float()
-            frames2 = frames2.cuda()
             frames2 = frames2.permute(0, 3, 1, 2)
 
             with torch.no_grad():
@@ -147,13 +142,14 @@ def frame_retr(dataset, directory, video1, queryframe1, video2, device="cuda", n
             logger.success(f"Data saved to {output_path}")
     
     closest_frames = []
-    # closest to video1_frame
-    for query_frame in queryframe1:
-        for i in range(len(path)):
-            if path[i][0] == query_frame:
-                closest_frames.append(path[i][1])
-                continue
-    
+    path_ = torch.tensor(path)
+    for i in range(len(path)):
+        if path[i][0] == queryframe1[0]:
+            closest_frames.append(path[i][1])
+            queryframe1.pop(0)
+        if len(queryframe1) == 0:
+            break
+    logger.info(f"Closest frames: {closest_frames}")
     result = {
         'closest_frames': closest_frames,
     }

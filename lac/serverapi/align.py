@@ -78,9 +78,7 @@ def align(dataset, directory, video1, video2, device="cuda", name=""):
 
     # get each embeddings
     model = model_dict[cfg.arch.type](cfg)
-    model = model.cuda()
     model, _, _ = load_ckpt(cfg, model, None)
-    model.eval()
 
     # check embedding exist or not
     embeddings_dir = os.path.join(args.directory, 'embeddings')
@@ -88,13 +86,13 @@ def align(dataset, directory, video1, video2, device="cuda", name=""):
     embedding_path1 = os.path.join(embeddings_dir, f'{video1_name}.npy')
     embedding_path2 = os.path.join(embeddings_dir, f'{video2_name}.npy')
 
+    video2 = read_video(video2_path)
+    video1 = read_video(video1_path)
     if os.path.exists(embedding_path1):
         logger.info(f"Embedding file for {video1_name} already exists.")
         embs1 = np.load(embedding_path1)
     else:
-        video1 = read_video(video1_path)
         frames1 = torch.from_numpy(video1).float()
-        frames1 = frames1.cuda()
         frames1 = frames1.permute(0, 3, 1, 2)
 
         with torch.no_grad():
@@ -107,9 +105,7 @@ def align(dataset, directory, video1, video2, device="cuda", name=""):
         logger.info(f"Embedding file for {video2_name} already exists.")
         embs2 = np.load(embedding_path2)
     else:
-        video2 = read_video(video2_path)
         frames2 = torch.from_numpy(video2).float()
-        frames2 = frames2.cuda()
         frames2 = frames2.permute(0, 3, 1, 2)
 
         with torch.no_grad():
@@ -120,7 +116,7 @@ def align(dataset, directory, video1, video2, device="cuda", name=""):
 
     # video_out_path = os.path.join(outdir, f"{video1_name}_{video2_name}/vid.mp4")
 
-    # # check if video exist, if not create_dynamic_video
+    # # # check if video exist, if not create_dynamic_video
     # if not os.path.exists(video_out_path):
     #     create_dynamic_video(embs=[embs1, embs2], frames=[video1, video2], video_path=video_out_path, use_dtw=True)
     #     logger.success(f"Dynamic video created at {video_out_path}")
@@ -148,6 +144,13 @@ def align(dataset, directory, video1, video2, device="cuda", name=""):
     with open(output_path, 'w') as f:
         json.dump(data, f)
     logger.success(f"Data saved to {output_path}")
+
+    plt.imshow(acc_cost_mat.T, origin='lower', cmap='viridis', interpolation='nearest')
+    plt.plot(path[0], path[1], color='cyan', linewidth=2)  # More visible path
+    plt.xlabel(f"V1: {video1_name} #Frames")
+    plt.ylabel(f"V2: {video2_name} #Frames")
+    output_path = os.path.join(outdir, f"{video1_name}_{video2_name}/dtw_plot.png")
+    plt.savefig(output_path)
     # data = json.load(open(output_path))
     return data
     
