@@ -1,23 +1,18 @@
-import React from "react";
+import React, { useEffect } from "react";
 import './video.css';
 import { getVideoFrameRate } from "./api";
 
-function VideoPlayer({ videoSrc, setCurrentFrameVideo }) {
+function VideoPlayer({ videoSrc, frameRate, setCurrentFrameVideo }) {
     const videoRef = React.useRef(null);
     const timelineRef = React.useRef(null);
     const [isPlaying, setIsPlaying] = React.useState(false);
     const [currentFrame, setCurrentFrame] = React.useState(0);
     const [totalFrames, setTotalFrames] = React.useState(0);
-    const [frameRate, setFrameRate] = React.useState(30); 
 
     React.useEffect(() => {
         const handleLoadedMetadata = () => {
             const duration = videoRef.current.duration;
-            // Assuming the video is encoded at 30 fps as a fallback
-            const calculatedFrameRate = 30;
-            const calculatedTotalFrames = Math.floor(duration * calculatedFrameRate);
-
-            setFrameRate(calculatedFrameRate);
+            const calculatedTotalFrames = Math.floor(duration * frameRate);
             setTotalFrames(calculatedTotalFrames);
         };
 
@@ -62,7 +57,7 @@ function VideoPlayer({ videoSrc, setCurrentFrameVideo }) {
 
     return (
         <div className="video-player">
-            <video ref={videoRef} src={videoSrc} width="600" height="600" />
+            <video ref={videoRef} src={videoSrc} width="400" height="400" />
             <div className="controls">
                 <button onClick={handlePlayPause} className="btn">
                     {isPlaying ? <i className="bi bi-pause-fill white"></i> : <i className="bi bi-play-fill white"></i>}
@@ -79,19 +74,20 @@ function VideoPlayer({ videoSrc, setCurrentFrameVideo }) {
     );
 }
 
-function VideoPlayerBookmark({ videoSrc, setCurrentFrameVideo, frameRate=30 }) {
+function VideoPlayerBookmark({ videoSrc, setCurrentFrameVideo, frameRate, bookmarks, setBookmarks }) {
     const videoRef = React.useRef(null);
     const timelineRef = React.useRef(null);
     const [isPlaying, setIsPlaying] = React.useState(false);
     const [currentFrame, setCurrentFrame] = React.useState(0);
     const [totalFrames, setTotalFrames] = React.useState(0);
-    const [bookmarks, setBookmarks] = React.useState([]);
+    const [isModalOpen, setIsModalOpen] = React.useState(false);
+    const [bookmarkTitle, setBookmarkTitle] = React.useState("");
+    const [bookmarkIndexToModify, setBookmarkIndexToModify] = React.useState(null);
 
     React.useEffect(() => {
         const handleLoadedMetadata = () => {
             const duration = videoRef.current.duration;
-            const calculatedFrameRate = frameRate;
-            const calculatedTotalFrames = Math.floor(duration * calculatedFrameRate);
+            const calculatedTotalFrames = Math.floor(duration * frameRate);
             setTotalFrames(calculatedTotalFrames);
         };
 
@@ -113,7 +109,14 @@ function VideoPlayerBookmark({ videoSrc, setCurrentFrameVideo, frameRate=30 }) {
                 videoElement.removeEventListener("timeupdate", handleTimeUpdate);
             }
         };
-    }, [frameRate]);
+    }, [frameRate, setCurrentFrameVideo]);
+
+    React.useEffect(() => {
+        if (videoSrc) {
+            setBookmarks([]);
+            setCurrentFrame(0);
+        }
+    }, [videoSrc]);
 
     const handlePlayPause = () => {
         if (videoRef.current.paused) {
@@ -134,19 +137,36 @@ function VideoPlayerBookmark({ videoSrc, setCurrentFrameVideo, frameRate=30 }) {
         setCurrentFrame(newFrame);
     };
 
-    const handleAddBookmark = () => {
-        const title = prompt("Enter bookmark title:");
-        if (title) {
-            setBookmarks([...bookmarks, { frame: currentFrame, title, time: videoRef.current.currentTime.toFixed(2) }]);
+    const openBookmarkModal = (index = null) => {
+        setIsModalOpen(true);
+        if (index !== null) {
+            setBookmarkTitle(bookmarks[index].title);
+            setBookmarkIndexToModify(index);
+        } else {
+            setBookmarkTitle("");
+            setBookmarkIndexToModify(null);
         }
     };
 
-    const handleModifyBookmark = (index) => {
-        const newTitle = prompt("Modify bookmark title:", bookmarks[index].title);
-        if (newTitle !== null) {
-            const updatedBookmarks = bookmarks.map((bookmark, idx) => idx === index ? { ...bookmark, title: newTitle } : bookmark);
+    const closeBookmarkModal = () => {
+        setIsModalOpen(false);
+        setBookmarkTitle("");
+        setBookmarkIndexToModify(null);
+    };
+
+    const handleAddOrModifyBookmark = () => {
+        if (bookmarkTitle.trim() === "") {
+            return; // Do nothing if the title is empty
+        }
+        if (bookmarkIndexToModify === null) {
+            setBookmarks([...bookmarks, { frame: currentFrame, title: bookmarkTitle, time: videoRef.current.currentTime.toFixed(2) }]);
+        } else {
+            const updatedBookmarks = bookmarks.map((bookmark, idx) => 
+                idx === bookmarkIndexToModify ? { ...bookmark, title: bookmarkTitle } : bookmark
+            );
             setBookmarks(updatedBookmarks);
         }
+        closeBookmarkModal();
     };
 
     const handleDeleteBookmark = (index) => {
@@ -160,7 +180,7 @@ function VideoPlayerBookmark({ videoSrc, setCurrentFrameVideo, frameRate=30 }) {
 
     return (
         <div className="video-player">
-            <video ref={videoRef} src={videoSrc} width="600" height="600" />
+            <video ref={videoRef} src={videoSrc} width="600" height="600" style={{ maxWidth: '100%' }} />
             <div className="controls">
                 <button onClick={handlePlayPause} className="btn">
                     {isPlaying ? <i className="bi bi-pause-fill white"></i> : <i className="bi bi-play-fill white"></i>}
@@ -177,25 +197,126 @@ function VideoPlayerBookmark({ videoSrc, setCurrentFrameVideo, frameRate=30 }) {
                 </div>
                 <div className="time">{currentFrame} / {totalFrames}</div>
             </div>
-            <button onClick={handleAddBookmark} className="btn btn-primary">Add Bookmark</button>
+            <button onClick={() => openBookmarkModal()} className="btn btn-primary">Add Bookmark</button>
             <div className="bookmarks-list w-100">
                 {bookmarks.map((bookmark, index) => (
                     <div key={index} className="row mt-1">
-                        <div className="col-md-8" onClick={() => handleBookmarkSelect(bookmark)}>
-                            {bookmark.title} - {bookmark.time}s
+                        <div className="col-md-10" onClick={() => handleBookmarkSelect(bookmark)}>
+                            {bookmark.title} - {bookmark.time}s ({bookmark.frame})
                         </div>
-                        <div className="col-md-2">
-                            <button className="btn" onClick={() => handleModifyBookmark(index)}>
-                                <i className="bi bi-pencil-square"></i> {/* Pencil icon for modify */}
+                        <div className="col-md-1">
+                            <button className="btn" onClick={() => openBookmarkModal(index)}>
+                                <i className="bi bi-pencil-square"></i>
                             </button>
                         </div>
-                        <div className="col-md-2">
+                        <div className="col-md-1">
                             <button className="btn" onClick={() => handleDeleteBookmark(index)}>
-                                <i className="bi bi-trash"></i> {/* Trash icon for delete */}
+                                <i className="bi bi-trash"></i>
                             </button>
                         </div>
                     </div>
                 ))}
+            </div>
+
+            {isModalOpen && (
+                <div className="bmModal">
+                    <div className="bmModal-content">
+                        <h5>{bookmarkIndexToModify !== null ? "Modify Bookmark" : "Add Bookmark"}</h5>
+                        <input
+                            type="text"
+                            value={bookmarkTitle}
+                            onChange={(e) => setBookmarkTitle(e.target.value)}
+                            placeholder="Enter bookmark title"
+                        />
+                        <div className="bmModal-actions">
+                            <button onClick={closeBookmarkModal} className="btn btn-secondary me-2">Cancel</button>
+                            <button onClick={handleAddOrModifyBookmark} className="btn btn-primary w-100 ">
+                                {bookmarkIndexToModify !== null ? "Modify" : "Add"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function VideoPlayerBookmarkCard({ videoSrc, setCurrentFrameVideo, frameRate, bookmarks }) {
+    const videoRef = React.useRef(null);
+    const timelineRef = React.useRef(null);
+    const [isPlaying, setIsPlaying] = React.useState(false);
+    const [currentFrame, setCurrentFrame] = React.useState(0);
+    const [totalFrames, setTotalFrames] = React.useState(0);
+    const [localBookmarks, setLocalBookmarks] = React.useState(bookmarks);
+
+    React.useEffect(() => {
+        const handleLoadedMetadata = () => {
+            const duration = videoRef.current.duration;
+            const calculatedTotalFrames = Math.floor(duration * frameRate);
+            setTotalFrames(calculatedTotalFrames);
+        };
+
+        const handleTimeUpdate = () => {
+            const frame_i = Math.floor(videoRef.current.currentTime * frameRate);
+            setCurrentFrame(frame_i);
+            if (setCurrentFrameVideo) setCurrentFrameVideo(frame_i);
+        };
+
+        const videoElement = videoRef.current;
+        if (videoElement) {
+            videoElement.addEventListener("loadedmetadata", handleLoadedMetadata);
+            videoElement.addEventListener("timeupdate", handleTimeUpdate);
+        }
+
+        return () => {
+            if (videoElement) {
+                videoElement.removeEventListener("loadedmetadata", handleLoadedMetadata);
+                videoElement.removeEventListener("timeupdate", handleTimeUpdate);
+            }
+        };
+    }, [frameRate, setCurrentFrameVideo]);
+
+    useEffect(() => {
+        setLocalBookmarks(bookmarks);
+    }, [bookmarks]);
+
+    const handlePlayPause = () => {
+        if (videoRef.current.paused) {
+            videoRef.current.play();
+            setIsPlaying(true);
+        } else {
+            videoRef.current.pause();
+            setIsPlaying(false);
+        }
+    };
+
+    const handleTimelineClick = (event) => {
+        const timelineWidth = timelineRef.current.offsetWidth;
+        const clickPosition = event.nativeEvent.offsetX;
+        const newFrame = Math.floor((clickPosition / timelineWidth) * totalFrames);
+        const newTime = newFrame / frameRate;
+        videoRef.current.currentTime = newTime;
+        setCurrentFrame(newFrame);
+    };
+
+    return (
+        <div className="video-player">
+            <video ref={videoRef} src={videoSrc} width="400" height="400" style={{ maxWidth: '100%' }} />
+            <div className="controls">
+                <button onClick={handlePlayPause} className="btn">
+                    {isPlaying ? <i className="bi bi-pause-fill white"></i> : <i className="bi bi-play-fill white"></i>}
+                </button>
+                <div className="timeline" ref={timelineRef} onClick={handleTimelineClick}>
+                    {localBookmarks.map(lbm => (
+                        <div key={lbm.frame}
+                            className="bookmark"
+                            style={{ left: `${(lbm.frame / totalFrames) * 100}%` }}
+                            title={lbm.title}
+                        />
+                    ))}
+                    <div className="timeline-progress" style={{ width: `${(currentFrame / totalFrames) * 100}%` }}></div>
+                </div>
+                <div className="time">{currentFrame} / {totalFrames}</div>
             </div>
         </div>
     );
@@ -245,4 +366,4 @@ function ShowFrames({ closestFrames, videoSrc }) {
     );
 }
 
-export {VideoPlayer, ShowFrames, VideoPlayerBookmark};
+export {VideoPlayer, ShowFrames, VideoPlayerBookmark, VideoPlayerBookmarkCard};

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Breadcrumbs } from "../VA_AL";
-import { VideoPlayer, ShowFrames, VideoPlayerBookmark } from "../../util/video";
+import { VideoPlayer, ShowFrames, VideoPlayerBookmark, VideoPlayerBookmarkCard } from "../../util/video";
 import { 
     fetchDatasets,
     fetchVideos,
@@ -32,12 +32,17 @@ function FrameRetrieval() {
     const [selectedVideos1, setSelectedVideos1] = React.useState('');
     const [videoSrc1, setVideoSrc1] = React.useState('');
     const [video1Frame, setVideo1Frame] = React.useState(0);
-    const [video1FrameRate, setVideo1FrameRate] = React.useState(30);
+    const [video1FrameRate, setVideo1FrameRate] = React.useState(0);
 
     const [selectedVideos2, setSelectedVideos2] = React.useState([]);
     const [videoSources2, setVideoSources2] = React.useState([]);
+    const [frameRates2, setFrameRates2] = React.useState([]);
     const [expandedVideos2, setExpandedVideos2] = React.useState(
         Array(selectedVideos2.length).fill(false));
+    const [bookmarks, setBookmarks] = React.useState([]);
+    const [videos2Bookmarks, setVideos2Bookmarks] = React.useState([]);
+
+    const [isLoading, setIsLoading] = React.useState(false);
 
     useEffect(() => {
         const loadDatasets = async () => {
@@ -59,40 +64,72 @@ function FrameRetrieval() {
     }, [selectedDataset]);
 
     const retrieveFrames = async () => {
+        setIsLoading(true);
         try {
-            await getVideosSrc(selectedVideos2, selectedDataset, setVideoSources2);
-            nextStep();
+            await getVideosSrc(selectedVideos2, selectedDataset, setVideoSources2, setFrameRates2)
+            .then(() => {
+                setExpandedVideos2(Array(selectedVideos2.length).fill(false));
+                setVideos2Bookmarks(Array(selectedVideos2.length).fill(bookmarks));
+            })
+            .finally(() => {
+                setIsLoading(false);
+                nextStep();
+            });
         } catch (error) {
             console.error("Error fetching video sources:", error);
         } finally {
-            console.log("Video sources fetched", videoSources2);
         }
     };
 
     const toggleExpand = (e) => {
-        const cardBody = e.target.nextElementSibling;
-        if (cardBody.style.display === 'none') {
-            cardBody.style.display = 'block';
-        } else {
-            cardBody.style.display = 'none';
-        }
+        // const cardBody = e.target.nextElementSibling;
+        // if (cardBody.style.display === 'none') {
+        //     cardBody.style.display = 'block';
+        // } else {
+        //     cardBody.style.display = 'none';
+        // }
 
         const videoIndex = selectedVideos2.indexOf(e.target.innerText);
         const expanded = expandedVideos2[videoIndex];
         const newExpanded = [...expandedVideos2];
         newExpanded[videoIndex] = !expanded;
         setExpandedVideos2(newExpanded);
-    };
 
-    const getExpandedVideos = () => {
-        const expandedVideos = [];
-        for (let i = 0; i < selectedVideos2.length; i++) {
-            if (expandedVideos2[i]) {
-                expandedVideos.push(selectedVideos2[i]);
-            }
+        // if expanded
+        if (!expanded) {
+            const bframes = bookmarks.map(bookmark => bookmark.frame);
+            fetch(`${process.env.REACT_APP_API_HOST}/frame_retrieval`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    dataset: selectedDataset,
+                    video1: selectedVideos1,
+                    video2: e.target.innerText,
+                    frame1: bframes,
+                    directory: savedDir + '/' + selectedFolder,
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                const newBookmarks = bookmarks.map(bookmark => ({ ...bookmark }));
+                for (let i = 0; i < newBookmarks.length; i++) {
+                    newBookmarks[i].frame = data.result.closest_frames[i];
+                }
+                const videoIndex = selectedVideos2.indexOf(e.target.innerText);
+                const updatedVideos2Bookmarks = [...videos2Bookmarks];
+                updatedVideos2Bookmarks[videoIndex] = newBookmarks;
+                setVideos2Bookmarks(updatedVideos2Bookmarks);
+                // console.log("New Bookmarks:", newBookmarks);
+            })
+            .catch(error => {
+                console.error("Error retrieving frames:", error);
+            })
+            .finally(() => {
+            });
         }
-        return expandedVideos;
-    }
+    };
 
     return (
         <div className="w-100">
@@ -178,16 +215,18 @@ function FrameRetrieval() {
                                     value={selectedVideos1}
                                     onChange={async (e) => {
                                         setSelectedVideos1(e.target.value);
-                                        await getVideoSrc(
-                                            e.target.value,
-                                            selectedDataset,
-                                            setVideoSrc1
-                                        );
-                                        const videoFrameRate = await getVideoFrameRate(
+                                        await getVideoFrameRate(
                                             e.target.value,
                                             selectedDataset
-                                        );
-                                        setVideo1FrameRate(videoFrameRate);
+                                        ).then((frameRate) => {
+                                            console.log("Frame Rate:", frameRate);
+                                            setVideo1FrameRate(frameRate);
+                                            getVideoSrc(
+                                                e.target.value,
+                                                selectedDataset,
+                                                setVideoSrc1
+                                            );
+                                        });
                                     }}
                                 >
                                     <option value="">Select a video</option>
@@ -199,7 +238,12 @@ function FrameRetrieval() {
                                 </select>
                                 {selectedVideos1 && (
                                     <div className="mt-3">
-                                        <VideoPlayerBookmark videoSrc={videoSrc1} setCurrentFrameVideo={setVideo1Frame} frameRate={video1FrameRate} />
+                                        <VideoPlayerBookmark 
+                                        videoSrc={videoSrc1} 
+                                        setCurrentFrameVideo={setVideo1Frame} 
+                                        frameRate={video1FrameRate}
+                                        bookmarks={bookmarks}
+                                        setBookmarks={setBookmarks} />
                                     </div>
                                 )}
                             </div>
@@ -210,7 +254,12 @@ function FrameRetrieval() {
                     <div className={currentStep === 3 ? "" : "d-none"}>
                         {selectedVideos1 && (
                             <div className="mt-3">
-                                <VideoPlayerBookmark videoSrc={videoSrc1} setCurrentFrameVideo={setVideo1Frame} frameRate={video1FrameRate} />
+                                <VideoPlayerBookmark 
+                                videoSrc={videoSrc1} 
+                                setCurrentFrameVideo={setVideo1Frame} 
+                                frameRate={video1FrameRate} 
+                                bookmarks={bookmarks}
+                                setBookmarks={setBookmarks}/>
                             </div>
                         )}
                     </div>
@@ -244,22 +293,51 @@ function FrameRetrieval() {
                     {/* STEP2 */}
                     {currentStep === 2 && (
                         <div>
-                            <VideoCheckboxes videos={videos} selectedVideos={selectedVideos2} setSelectedVideos={setSelectedVideos2} />
+                            <VideoCheckboxes 
+                            videos={videos} 
+                            selectedVideos={selectedVideos2} 
+                            setSelectedVideos={setSelectedVideos2} />
                             <div className="d-flex justify-content-end">
-                                <button className="btn btn-primary mt-3" onClick={retrieveFrames}>Retrieve Frames</button>
+                                {/* loading */}
+                                {isLoading && <div className="spinner-border mt-3 me-2" role="status">
+                                    <span className="visually-hidden">Loading...</span>
+                                </div>}
+                                <button 
+                                className="btn btn-primary mt-3" 
+                                onClick={retrieveFrames}
+                                disabled={isLoading}
+                                >Retrieve Frames</button>
                             </div>
                         </div>
                     )}
                     {/* STEP3 */}
                     {currentStep === 3 && (
                         <div className="">
-                             {videoSources2.map((videoSrc, index) => (
+                             {selectedVideos2 && videoSources2.map((videoSrc, index) => (
                                 <div key={index} className="mt-3 video-card">
                                     <div className="card-header" onClick={toggleExpand} style={{cursor: 'pointer'}}>
                                         {selectedVideos2[index]}
+                                        <i
+                                            className={`bi ${
+                                                expandedVideos2[index]
+                                                    ? 'bi-caret-up-fill'
+                                                    : 'bi-caret-down-fill'
+                                            }`}
+                                            style={{ float: 'right' }}
+                                        ></i>
                                     </div>
-                                    <div className="card-body" style={{display: 'none'}}>
-                                        <VideoPlayer videoSrc={`${process.env.REACT_APP_API_HOST}${videoSrc}`} />
+                                    <div className={`card-body ${expandedVideos2[index] ? 'expanded' : 'collapsed'}`}>
+                                        <VideoPlayerBookmarkCard
+                                        videoSrc={`${process.env.REACT_APP_API_HOST}${videoSrc}`} 
+                                        setCurrentFrameVideo={0}
+                                        frameRate={frameRates2[index]}
+                                        bookmarks={videos2Bookmarks[index]}
+                                        />
+                                        {/* <VideoPlayer 
+                                        videoSrc={`${process.env.REACT_APP_API_HOST}${videoSrc}`} 
+                                        frameRate={frameRates2[index]}
+                                        setCurrentFrameVideo={0}
+                                        /> */}
                                     </div>
                                 </div>
                             ))}
@@ -284,10 +362,12 @@ const VideoCheckboxes = ({ videos, selectedVideos, setSelectedVideos }) => {
 
     const handleSelectAll = () => {
         setSelectedVideos(videos);
+        console.log("Select All:", videos);
     };
 
     const handleUnselectAll = () => {
         setSelectedVideos([]);
+        console.log("Unselect All");
     };
 
     return (
@@ -320,5 +400,6 @@ const VideoCheckboxes = ({ videos, selectedVideos, setSelectedVideos }) => {
         </div>
     );
 };
+
 
 export { FrameRetrieval };

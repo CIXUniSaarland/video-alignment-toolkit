@@ -6,6 +6,32 @@
 
 .video-card {
     border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.video-card .card-header {
+    padding: 5px 15px;
+}
+
+.video-card .card-header i {
+    pointer-events: none;
+}
+
+.video-card .card-body {
+    padding: 5px 0px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-in-out;
+}
+
+.video-card .card-body.expanded {
+    max-height: 500px;
+    padding: 0;
+}
+
+.video-card .card-body.collapsed {
+    max-height: 0;
+    padding: 0;
 }
 
 .video-card .btn-link {
