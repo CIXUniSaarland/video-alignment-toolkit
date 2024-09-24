@@ -6,7 +6,7 @@ import { NavLink } from 'react-router-dom';
 function Footer() {
     return (
         <footer style={{ textAlign: 'center', padding: '10px 0', width: '100%' }}>
-            <p>&copy; 2024 Computational Interaction Group, Saarland University. All rights reserved.</p>
+            <p>&copy;</p>
         </footer>
     );
 }
