@@ -11,7 +11,7 @@ from sklearn.manifold import TSNE
 
 from model.tcn import TCN
 from model.tcc import TCC
-from model.lac2 import LAC
+from model.lac import LAC
 import utils.parser as parser
 import torch
 
@@ -20,7 +20,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dtw import dtw
+from fastdtw import fastdtw
 from matplotlib.animation import FuncAnimation
 from scipy.spatial.distance import cdist
 from dataset import construct_eval_loader
@@ -128,29 +128,30 @@ def align(dataset, directory, video1, video2, device="cuda", name=""):
         dist = torch.sum((x - y) ** 2)
         return dist
     
-    d, cost_mat, acc_cost_mat, path = dtw(embs1, embs2, dist=dist_fn)
+    d, path = fastdtw(embs1, embs2, dist=dist_fn)
     path = torch.tensor(path)
 
-    normalized_acc_cost_mat = acc_cost_mat / acc_cost_mat.max()
-    normalized_acc_cost_mat = [[float(f"{x:.3f}") for x in y] for y in normalized_acc_cost_mat.tolist()]
+    # normalized_acc_cost_mat = acc_cost_mat / acc_cost_mat.max()
+    # normalized_acc_cost_mat = [[float(f"{x:.3f}") for x in y] for y in normalized_acc_cost_mat.tolist()]
 
     data = {
         "v1": video1_name,
         "v2": video2_name,
         "path": path.T.tolist(),
-        "acc_cost_mat": normalized_acc_cost_mat,
+        "acc_cost_mat": None,
+        # "acc_cost_mat": normalized_acc_cost_mat,
         "dtw_cost": d
     }
     with open(output_path, 'w') as f:
         json.dump(data, f)
     logger.success(f"Data saved to {output_path}")
 
-    plt.imshow(acc_cost_mat.T, origin='lower', cmap='viridis', interpolation='nearest')
-    plt.plot(path[0], path[1], color='cyan', linewidth=2)  # More visible path
-    plt.xlabel(f"V1: {video1_name} #Frames")
-    plt.ylabel(f"V2: {video2_name} #Frames")
-    output_path = os.path.join(outdir, f"{video1_name}_{video2_name}/dtw_plot.png")
-    plt.savefig(output_path)
+    # plt.imshow(acc_cost_mat.T, origin='lower', cmap='viridis', interpolation='nearest')
+    # plt.plot(path[0], path[1], color='cyan', linewidth=2)  # More visible path
+    # plt.xlabel(f"V1: {video1_name} #Frames")
+    # plt.ylabel(f"V2: {video2_name} #Frames")
+    # output_path = os.path.join(outdir, f"{video1_name}_{video2_name}/dtw_plot.png")
+    # plt.savefig(output_path)
     # data = json.load(open(output_path))
     return data
     

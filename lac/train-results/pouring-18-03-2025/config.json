@@ -1,0 +1,73 @@
+{
+    "arch": {
+        "l2_normalize": true,
+        "type": "ResNet50_Transformer2"
+    },
+    "augmentation": {
+        "brightness": true,
+        "brightness_delta": 0.8,
+        "contrast": true,
+        "contrast_delta": 0.8,
+        "hue": true,
+        "hue_delta": 0.2,
+        "random_crop": false,
+        "random_flip": true,
+        "saturation": true,
+        "saturation_delta": 0.8,
+        "strength": 1
+    },
+    "data_loader": {
+        "batch_size": 1,
+        "consistent_offset": 0.2,
+        "context_stride": 1,
+        "data_dir": "../datasets/pouring",
+        "frame_stride": 16,
+        "negative_range": 30,
+        "num_context_steps": 2,
+        "num_contexts": 1,
+        "num_frames": 128,
+        "num_steps": 32,
+        "num_workers": 2,
+        "positive_range": 10,
+        "random_offset": 1,
+        "sampling": "time_augment",
+        "sampling_region": 1.5,
+        "shuffle": true,
+        "ssl": true,
+        "tcn_multiply": 8,
+        "type": "Pouring"
+    },
+    "eval": true,
+    "img_size": 224,
+    "loss": {
+        "alpha": 0.1,
+        "sw_bool": true,
+        "temperature": 0.8,
+        "type": "lac_loss",
+        "var": 10
+    },
+    "n_gpu": 1,
+    "name": "LAC",
+    "optimizer": {
+        "grad_clip": 10,
+        "lr": 0.0001,
+        "momentum": 0.9,
+        "scheduler_type": "cosine",
+        "type": "Adam",
+        "weight_decay": 1e-05
+    },
+    "seed": 1,
+    "trainer": {
+        "epochs": 300,
+        "log_dir": "saved/logs/",
+        "log_interval": 10,
+        "log_summary": true,
+        "loguru_dir": "saved/loguru/",
+        "resume": false,
+        "resume_model": "ckpt_epoch_90.pth",
+        "save_dir": "saved/models/",
+        "tensorboard": true
+    },
+    "type": "LAC",
+    "use_amp": false
+}

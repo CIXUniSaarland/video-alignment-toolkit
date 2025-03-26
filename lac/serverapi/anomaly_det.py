@@ -11,7 +11,7 @@ from sklearn.manifold import TSNE
 
 from model.tcn import TCN
 from model.tcc import TCC
-from model.lac2 import LAC
+from model.lac import LAC
 import utils.parser as parser
 import torch
 
@@ -20,7 +20,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dtw import dtw
+from fastdtw import fastdtw
 from matplotlib.animation import FuncAnimation
 from scipy.spatial.distance import cdist
 from dataset import construct_eval_loader
@@ -120,11 +120,11 @@ def anomaly_det(dataset, directory, video1, video2, device="cuda", name=""):
         dist = torch.sum((x - y) ** 2)
         return dist
     
-    d, cost_mat, acc_cost_mat, path = dtw(embs1, embs2, dist=dist_fn)
+    _, path = fastdtw(embs1, embs2, dist=dist_fn)
     path = torch.tensor(path)
 
-    normalized_acc_cost_mat = acc_cost_mat / acc_cost_mat.max()
-    normalized_acc_cost_mat = [[float(f"{x:.3f}") for x in y] for y in normalized_acc_cost_mat.tolist()]
+    # normalized_acc_cost_mat = acc_cost_mat / acc_cost_mat.max()
+    # normalized_acc_cost_mat = [[float(f"{x:.3f}") for x in y] for y in normalized_acc_cost_mat.tolist()]
 
     # Anomaly detection
     distances = []

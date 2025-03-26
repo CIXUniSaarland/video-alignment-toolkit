@@ -4,8 +4,8 @@ import pandas as pd
 from pathlib import Path
 from itertools import repeat
 from collections import OrderedDict
-
 import os
+from loguru import logger
 
 def ensure_dir(dirname):
     dirname = Path(dirname)
@@ -43,6 +43,23 @@ def prepare_device(n_gpu_use):
     device = torch.device('cuda:0' if n_gpu_use > 0 else 'cpu')
     list_ids = list(range(n_gpu_use))
     return device, list_ids
+
+def load_ckpt(cfg, model, optimizer):
+    path = cfg.trainer.save_dir
+    if os.path.exists(path):
+        model_names = [m for m in os.listdir(path) if m.endswith(".pth")]
+        if len(model_names) > 0:
+            model_names.sort()
+            model_name = model_names[-1]
+            path = os.path.join(path, model_name)
+            checkpoint = torch.load(path)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            if optimizer:
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            logger.info(f"Loaded checkpoint from {path}")
+            return model, optimizer, checkpoint["epoch"]
+        
+    return model, optimizer, 0
 
 class MetricTracker:
     def __init__(self, *keys, writer=None):

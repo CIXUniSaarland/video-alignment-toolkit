@@ -441,6 +441,41 @@ function VA_API() {
         setIsTrain(false);
     }
 
+    const [uploadedFile, setUploadedFile] = useState(null);
+
+    // Handle file selection
+    const handleFileUpload = (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            setUploadedFile(file);
+            setSelectedDataset(file.name);
+            setWarningMessage('');
+            // You can also send the file to a backend for storage if needed
+            uploadDataset(file);
+        }
+    };
+
+    // Function to handle file upload (Optional: Send to backend)
+    const uploadDataset = async (file) => {
+        const formData = new FormData();
+        formData.append("dataset", file);
+
+        try {
+            const response = await fetch("http://localhost:5000/upload", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (response.ok) {
+                console.log("Upload successful");
+            } else {
+                console.error("Upload failed");
+            }
+        } catch (error) {
+            console.error("Error uploading file:", error);
+        }
+    };
+
     // next button: disabled
     const isDisabled = (!selectedDataset && currentStep === 1) || loading || (!configData && currentStep === 3);
     
@@ -462,7 +497,7 @@ function VA_API() {
             <div className="row">
                 <div className="col-md-6">
                     {/* STEP1 */}
-                    <div className={`step ${currentStep === 1 ? 'visible' : ''}`}>
+                    {/* <div className={`step ${currentStep === 1 ? 'visible' : ''}`}>
                         <div className="d-flex justify-content-between align-items-center">
                             <h5>1. Select a Dataset</h5>
                             {loading && (
@@ -480,6 +515,56 @@ function VA_API() {
                             onChange={e => {
                                 setSelectedDataset(e.target.value);
                                 setWarningMessage(''); // Clear warning when a selection is made
+                            }}
+                            className="form-select"
+                        >
+                            <option value="">Select a Dataset</option>
+                            {datasets.map((dataset, index) => (
+                                <option key={index} value={dataset}>{dataset}</option>
+                            ))}
+                        </select>
+                    </div> */}
+                    <div className={`step ${currentStep === 1 ? 'visible' : ''}`}>
+                        <div className="d-flex justify-content-between align-items-center">
+                            <h5>1. Select a Dataset</h5>
+                            {loading && (
+                                <div className="loading-spinner">
+                                    <div className="spinner-border" role="status">
+                                        <span className="visually-hidden">Loading...</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <p>Select a previous uploaded dataset or upload a new one. For uploading, zip the dataset with all the videos inside a single folder.</p>
+
+                        {/* File Upload Input */}
+                        <div className="mb-3">
+                            <label htmlFor="datasetUpload" className="form-label">Upload a Dataset:</label>
+                            <div className="d-flex justify-content-between align-items-center gap-2">
+                                <input
+                                    type="file"
+                                    id="datasetUpload"
+                                    className="form-control"
+                                    onChange={e => setUploadedFile(e.target.files[0])}
+                                />
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={() => handleFileUpload(uploadedFile)}
+                                    disabled={!uploadedFile}
+                                >
+                                    Upload
+                                </button>
+                            </div>
+                            {uploadedFile && <p className="text-success mt-2">Selected: {uploadedFile.name}</p>}
+                        </div>
+
+                        {/* Dataset Selection Dropdown */}
+                        <select
+                            value={selectedDataset}
+                            onChange={e => {
+                                setSelectedDataset(e.target.value);
+                                setWarningMessage('');
                             }}
                             className="form-select"
                         >

@@ -12,3 +12,9 @@ def load_config(args):
         cfg = edict(json.load(f))
     cfg.cfg_path = args.config
     return cfg
+
+def load_config_file(filepath):
+    with open(filepath, 'r') as f:
+        cfg = edict(json.load(f))
+    cfg.cfg_path = filepath
+    return cfg

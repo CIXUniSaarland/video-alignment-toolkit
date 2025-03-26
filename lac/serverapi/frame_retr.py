@@ -10,16 +10,15 @@ from sklearn.manifold import TSNE
 
 from model.tcn import TCN
 from model.tcc import TCC
-from model.lac2 import LAC
+from model.lac import LAC
 import utils.parser as parser
 import torch
 
 import os
-import math
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dtw import dtw
+from fastdtw import fastdtw
 from matplotlib.animation import FuncAnimation
 from scipy.spatial.distance import cdist
 from dataset import construct_eval_loader
@@ -121,11 +120,11 @@ def frame_retr(dataset, directory, video1, queryframe1, video2, device="cuda", n
                 np.save(embedding_path2, embs2.cpu().numpy())
                 logger.success(f"Embedding saved to {embedding_path2}")
     
-        d, cost_mat, acc_cost_mat, path = dtw(embs1, embs2, dist=dist_fn)
+        d, path = fastdtw(embs1, embs2, dist=dist_fn)
         path = torch.tensor(path)
 
-        normalized_acc_cost_mat = acc_cost_mat / acc_cost_mat.max()
-        normalized_acc_cost_mat = [[float(f"{x:.3f}") for x in y] for y in normalized_acc_cost_mat.tolist()]
+        # normalized_acc_cost_mat = acc_cost_mat / acc_cost_mat.max()
+        # normalized_acc_cost_mat = [[float(f"{x:.3f}") for x in y] for y in normalized_acc_cost_mat.tolist()]
 
         path = path.T.tolist()
 
@@ -133,7 +132,8 @@ def frame_retr(dataset, directory, video1, queryframe1, video2, device="cuda", n
             "v1": video1_name,
             "v2": video2_name,
             "path": path,
-            "acc_cost_mat": normalized_acc_cost_mat,
+            # "acc_cost_mat": normalized_acc_cost_mat,
+            "acc_cost_mat": None,
             "dtw_cost": d
         }
 

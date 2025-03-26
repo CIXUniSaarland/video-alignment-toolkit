@@ -3,7 +3,7 @@ import torch
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-from dtw import dtw
+from fastdtw import fastdtw
 from matplotlib.animation import FuncAnimation
 from scipy.spatial.distance import cdist
 from loguru import logger
@@ -35,7 +35,7 @@ def unnorm(query_frame):
 def align(query_feats, candidate_feats, use_dtw):
     """Align videos based on dynamic time warping."""
     if use_dtw:
-        _, _, _, path = dtw(query_feats, candidate_feats, dist=dist_fn)
+        _, _, _, path = fastdtw(query_feats, candidate_feats, dist=dist_fn)
         _, uix = np.unique(path[0], return_index=True)
         nns = path[1][uix] 
     else:

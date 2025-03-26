@@ -66,7 +66,8 @@ def save_ckpt(cfg, model, optimizer, epoch):
         }, path)
     logger.info(f"Saved checkpoint to {path}")
 
-def train(cfg, train_loader, train_eval_loader=None, val_eval_loader=None):
+def train(cfg, train_loader, train_eval_loader=None, val_eval_loader=None, io=None):
+    loss_list = []
     model = model_dict[cfg.arch.type](cfg)
     model_cfg = align_dict[cfg.type](cfg)
 
@@ -141,14 +142,63 @@ def train(cfg, train_loader, train_eval_loader=None, val_eval_loader=None):
             if cfg.device == "cuda":
                 torch.cuda.synchronize()
                 torch.cuda.empty_cache()
-            logger.info(f"Epoch: {epoch}, Batch: {i}, Loss: {loss.item()}")
+            if io is None:
+                logger.info(f"Epoch: {epoch}, Batch: {i}, Loss: {loss.item()}")
+            else:
+                progress = (epoch / cfg.trainer.epochs) * 100
+                time_elapsed = datetime.now() - time_start
+                if progress > 0:
+                    # Calculate remaining time
+                    estimated_total_time = time_elapsed / (progress / 100)
+                    remaining_time = estimated_total_time - time_elapsed
+
+                    remaining_time = str(remaining_time).split(".")[0]
+                else:
+                    remaining_time = "Calculating..."
+
+                loss_list.append(avg_loss)
+                io.emit('training_progress', {
+                            'data': f"Epoch: {epoch} / {cfg.trainer.epochs}, Loss: {avg_loss}, Time: {datetime.now() - time_start}",
+                            'match': True,
+                            'epoch': epoch,
+                            'loss': loss.item(),
+                            'loss_list': loss_list,
+                            'time': str(time_elapsed),
+                            'progress': progress,
+                            'remaining_time': str(remaining_time)
+                        })
+                
 
         avg_loss /= len(train_loader)
         scheduler.step()
 
-        logger.info(f"Epoch: {epoch}, Loss: {avg_loss}")
-        print(f"Epoch: {epoch} / {cfg.trainer.epochs}, Loss: {avg_loss}, Time: {datetime.now() - time_start}")
+        if io is None:
+            logger.info(f"Epoch: {epoch}, Loss: {avg_loss}")
+            print(f"Epoch: {epoch} / {cfg.trainer.epochs}, Loss: {avg_loss}, Time: {datetime.now() - time_start}")
+        else:
+            progress = (epoch / cfg.trainer.epochs) * 100
+            time_elapsed = datetime.now() - time_start
+            if progress > 0:
+                # Calculate remaining time
+                estimated_total_time = time_elapsed / (progress / 100)
+                remaining_time = estimated_total_time - time_elapsed
 
+                remaining_time = str(remaining_time).split(".")[0]
+            else:
+                remaining_time = "Calculating..."
+
+            loss_list.append(avg_loss)
+            io.emit('training_progress', {
+                        'data': f"Epoch: {epoch} / {cfg.trainer.epochs}, Loss: {avg_loss}, Time: {datetime.now() - time_start}",
+                        'match': True,
+                        'epoch': epoch,
+                        'loss': loss.item(),
+                        'loss_list': loss_list,
+                        'time': str(time_elapsed),
+                        'progress': progress,
+                        'remaining_time': str(remaining_time)
+                    })
+            
         writer.add_scalar('train/lr', [param_group["lr"] for param_group in optimizer.param_groups][0], epoch)
         writer.add_scalar('train/loss', avg_loss, epoch)
 
