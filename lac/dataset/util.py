@@ -4,6 +4,7 @@ import random
 import torch
 from torchvision import transforms
 from PIL import Image, ImageOps, ImageFilter
+import os
 
 from loguru import logger
 import cv2
@@ -416,6 +417,28 @@ def read_video(video_filename, width=224, height=224):
             frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
             frame_rgb = cv2.resize(frame_rgb, (width, height))
             frames.append(frame_rgb)
+    frames = np.asarray(frames)
+    return frames
+
+def read_videos_from_folder(path, folder_names, width=224, height=224):
+    frames = []
+
+    for name in folder_names:
+        folder_path = path + '/' + str(name)
+        image_files = sorted([
+            f for f in os.listdir(folder_path) 
+            if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+        ])
+
+        for image_file in image_files:
+            image_path = os.path.join(folder_path, image_file)
+            frame_bgr = cv2.imread(image_path)
+            if frame_bgr is None:
+                continue  # Skip unreadable frames
+            frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            frame_rgb = cv2.resize(frame_rgb, (width, height))
+            frames.append(frame_rgb)
+
     frames = np.asarray(frames)
     return frames
 

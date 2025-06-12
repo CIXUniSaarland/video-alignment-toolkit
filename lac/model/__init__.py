@@ -115,7 +115,7 @@ def train(cfg, train_loader, train_eval_loader=None, val_eval_loader=None, io=No
 
             optimizer.zero_grad()
 
-            with torch.cuda.amp.autocast(enabled=cfg.use_amp):
+            with torch.amp.autocast('cuda', enabled=cfg.use_amp):
                 if cfg.arch.type == "ResNet50_Transformer1":
                     embed = model(
                         frames, 

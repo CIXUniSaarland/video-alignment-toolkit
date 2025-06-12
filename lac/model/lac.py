@@ -168,7 +168,8 @@ class _SoftSW(torch.autograd.Function):
                 Iy[i, j] = smooth_max(torch.tensor([D[i-1, j] - go[i-1, j-1], Ix[i-1, j] - go[i-1, j-1], Iy[i-1, j] - ge[i-1, j-1]]), temperature)
                 Iy_p[i, j] = torch.softmax(torch.tensor([D[i-1, j] - go[i-1, j-1], Ix[i-1, j] - go[i-1, j-1], Iy[i-1, j] - ge[i-1, j-1]]), 0)
                 
-        D_ravel = torch.tensor(D.ravel())
+        # D_ravel = torch.tensor(D.ravel())
+        D_ravel = D.ravel().detach().clone().requires_grad_(True)
         value = smooth_max(D_ravel, temperature)
         probas = torch.softmax(D_ravel, 0)
         probas = probas.reshape(D.shape)
