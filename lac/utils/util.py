@@ -44,7 +44,14 @@ def prepare_device(n_gpu_use):
     list_ids = list(range(n_gpu_use))
     return device, list_ids
 
-def load_ckpt(cfg, model, optimizer):
+def load_ckpt(cfg, model, optimizer, model_path=None):
+    if model_path != None:
+        checkpoint = torch.load(model_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        if optimizer:
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        logger.info(f"Loaded checkpoint from {model_path}")
+        return model, optimizer, checkpoint["epoch"]
     path = cfg.trainer.save_dir
     if os.path.exists(path):
         model_names = [m for m in os.listdir(path) if m.endswith(".pth")]

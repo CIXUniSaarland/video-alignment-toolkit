@@ -25,13 +25,13 @@ class Jester(torch.utils.data.Dataset):
         self.data_dir = self.cfg.data_loader.data_dir
 
         self.chosen_classes = [
-            'Swiping Left',
-            'Swiping Right',
-            'Swiping Down',
-            'Swiping Up',
-            'Sliding Two Fingers Down',
-            'Sliding Two Fingers Up',
-            'Thumb Down',
+            # 'Swiping Left',
+            # 'Swiping Right',
+            # 'Swiping Down',
+            # 'Swiping Up',
+            # 'Sliding Two Fingers Down',
+            # 'Sliding Two Fingers Up',
+            # 'Thumb Down',
             'Thumb Up',
         ]
 

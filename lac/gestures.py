@@ -29,7 +29,7 @@ model_dict = {
 
 # logger.info(f"Start Frame Retrieval with args: {args}")
 # args = SimpleNamespace(**args)
-config = '/home/joao/Code/video-alignment-toolkit/lac/config/jester/lac.json'
+config = '/home/joao/Code/video-alignment-toolkit/lac/config/jester/tcc.json'
 
 with open(config, 'r') as f:
     cfg = EasyDict(json.load(f))
@@ -61,8 +61,10 @@ def dist_fn(x, y):
 #     path = data['path']
 
 # else:
+
+model_path = "/home/joao/Code/video-alignment-toolkit/lac/saved/models/TCC-ckpt_epoch_199.pth"
 model = model_dict[cfg.arch.type](cfg)
-model, _, _ = load_ckpt(cfg, model, None)
+model, _, _ = load_ckpt(cfg, model, None, model_path)
 
 # check embedding exist or not
 # embeddings_dir = os.path.join(args.directory, 'embeddings')
@@ -71,13 +73,13 @@ model, _, _ = load_ckpt(cfg, model, None)
 # embedding_path2 = os.path.join(embeddings_dir, f'{video2_name}.npy')
 
 chosen_classes = [
-    'Swiping Left',
-    'Swiping Right',
-    'Swiping Down',
-    'Swiping Up',
-    'Sliding Two Fingers Down',
-    'Sliding Two Fingers Up',
-    'Thumb Down',
+    # 'Swiping Left',
+    # 'Swiping Right',
+    # 'Swiping Down',
+    # 'Swiping Up',
+    # 'Sliding Two Fingers Down',
+    # 'Sliding Two Fingers Up',
+    # 'Thumb Down',
     'Thumb Up',
 ]
 
@@ -91,7 +93,9 @@ for label in chosen_classes:
 
 video1 = read_videos_from_folder(dataset_path + "/Train", video_idx)
 test_class = 'Thumb Down'
-video2 = read_videos_from_folder(dataset_path + "/Train", [df[df['label'] == test_class].iloc[54]['video_id']])
+video2 = read_videos_from_folder(dataset_path + "/Train", [df[df['label'] == test_class].iloc[55]['video_id']])
+
+print(video_idx, df[df['label'] == test_class].iloc[55]['video_id'])
 # if os.path.exists(embedding_path1):
 #     logger.info(f"Embedding file for {video1_name} already exists.")
 #     embs1 = np.load(embedding_path1)
@@ -118,8 +122,10 @@ with torch.no_grad():
     # np.save(embedding_path2, embs2.cpu().numpy())
     # logger.success(f"Embedding saved to {embedding_path2}")
 
-print(embs1.shape)
-print(embs2.shape)
+
+
+# print(embs1.shape)
+# print(embs2.shape)
 
 # d, path = fastdtw(embs1, embs2, dist=dist_fn)
 # path = torch.tensor(path)
@@ -152,13 +158,27 @@ print(embs2.shape)
 
 # print(path)
 
+d, path = fastdtw(embs1, embs2, dist=dist_fn)
+
+print(d)
+
+
 m = None
 idx = None
 
-for j in range(embs1.shape[0]):
-    d = dist_fn(embs1[j], embs2[20])
-    if m is None or d < m:
-        m = d
-        idx = j
+# for j in range(embs1.shape[0]):
+#     d = dist_fn(embs1[j], embs2[20])
+#     if m is None or d < m:
+#         m = d
+#         idx = j
+total_dist = 0
 
-print(idx)
+for i in range(embs1.shape[0]):
+    for j in range(embs2.shape[0]):
+        d = dist_fn(embs1[i], embs2[j])
+        if m is None or d < m:
+            m = d
+            idx = j
+    total_dist += m
+
+print(total_dist)
