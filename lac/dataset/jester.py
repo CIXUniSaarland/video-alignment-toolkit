@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import pandas as pd
 
 from loguru import logger
-from .util import create_data_augment, pad_zeros, read_videos_from_folder
+from .util import create_data_augment, pad_zeros, read_video, read_videos_from_folder
 
 class Jester(torch.utils.data.Dataset):
     def __init__(self, cfg, csv_name="Train.csv"):
@@ -21,25 +21,12 @@ class Jester(torch.utils.data.Dataset):
             mode: Either 'train' or 'eval'; affects the data returned.
         """
         self.cfg = cfg
-        self.size = cfg.data_loader.size
         self.data_dir = self.cfg.data_loader.data_dir
 
-        self.chosen_classes = [
-            # 'Swiping Left',
-            # 'Swiping Right',
-            # 'Swiping Down',
-            # 'Swiping Up',
-            # 'Sliding Two Fingers Down',
-            # 'Sliding Two Fingers Up',
-            # 'Thumb Down',
-            'Thumb Up',
-        ]
-
-        self.df = pd.read_csv(os.path.join(self.data_dir, csv_name))
-
-        filtered_df = self.df[self.df['label'].isin(self.chosen_classes)]
-        self.size = min(filtered_df['label'].value_counts().min(), self.size)
-
+        self.video_filenames = sorted(glob.glob(os.path.join(cfg.data_loader.data_dir + '/videos', "*.mp4")))
+        self.size = len(self.video_filenames)
+        
+        self.dataset = self.video_filenames
         
         self.num_frames = cfg.data_loader.num_frames
         self.num_contexts = cfg.data_loader.num_contexts
@@ -55,11 +42,8 @@ class Jester(torch.utils.data.Dataset):
         return self.size
     
     def __getitem__(self, idx):
-        video_idx = []
-        for label in self.chosen_classes:
-            video_idx.append(self.df[self.df['label'] == label].iloc[idx]['video_id'])
-
-        frames = read_videos_from_folder(self.data_dir + '/Train', video_idx)
+        video_filename = self.dataset[idx]
+        frames = read_video(video_filename)
         
         seq_len = frames.shape[0]
 

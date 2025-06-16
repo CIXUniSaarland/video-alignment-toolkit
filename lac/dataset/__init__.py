@@ -12,6 +12,8 @@ def construct_train_loader(cfg, pkl_name="train.pkl"):
                              action=cfg.data_loader.action)
     elif cfg.data_loader.type.lower() == "jester":
         dataset = Jester(cfg)
+    else:
+        raise ValueError(f"Unsupported dataset type: {cfg.data_loader.type}")
 
     loader = DataLoader(
         dataset,
@@ -30,6 +32,10 @@ def construct_eval_loader(cfg, pkl_name="val.pkl"):
                              pkl_name=pkl_name, 
                              mode="eval", 
                              action=cfg.data_loader.action)
+    elif cfg.data_loader.type.lower() == "jester":
+        raise ValueError("Jester dataset does not support evaluation mode.")
+    else:
+        raise ValueError(f"Unsupported dataset type: {cfg.data_loader.type}")
 
     loader = DataLoader(
         dataset,
