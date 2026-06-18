@@ -6,6 +6,8 @@ import {
     saveConfig,
     startEventSource,
     getDefaultConfig,
+    fetchConfigFiles,
+    fetchConfigFile,
     startWebSocketConnection,
     stopTrainingSocket
 } from "../util/api";
@@ -19,6 +21,10 @@ Chart.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Too
 
 function RecursiveJsonEditor({ data, onChange, setWarningMessage }) {
     const [modelOptions, setModelOptions] = useState(["model1", "model2", "model3"]);
+    const [collapsedSections, setCollapsedSections] = useState({
+        data_loader: true,
+        trainer: true,
+    });
     const acceptedKeys = {
         "n_gpu": {
             "name": "Number of GPUs",
@@ -106,6 +112,57 @@ function RecursiveJsonEditor({ data, onChange, setWarningMessage }) {
         return acceptedKeys[key] !== undefined;
     };
 
+    const isCollapsibleSection = (key) => key === 'data_loader' || key === 'trainer';
+    const hasDataLoaderSection = typeof data.data_loader === 'object' && data.data_loader !== null;
+
+    const toggleSection = (key) => {
+        setCollapsedSections((prev) => ({
+            ...prev,
+            [key]: !prev[key],
+        }));
+    };
+
+    const renderFieldRow = (fieldKey, extraClass = '') => {
+        if (fieldKey === 'resume_model') {
+            return null;
+        }
+
+        return (
+            <div className={`row step3-json w-100 ${extraClass}`.trim()}>
+                <div className="col-md-3">
+                    <label className="form-label">{acceptedKeys[fieldKey]["name"]}</label>
+                </div>
+                <div className="col-md-9">
+                    {acceptedKeys[fieldKey].options ? (
+                        <select
+                            value={data[fieldKey] ?? acceptedKeys[fieldKey].options[0]}
+                            onChange={e => handleChange(e, fieldKey)}
+                            className="form-select"
+                        >
+                            {acceptedKeys[fieldKey].options.map(option => (
+                                <option key={option} value={option}>{option}</option>
+                            ))}
+                        </select>
+                    ) : acceptedKeys[fieldKey].type === 'bool' ? (
+                        <input 
+                            type="checkbox" 
+                            checked={!!data[fieldKey]} 
+                            onChange={e => handleChange(e, fieldKey)} 
+                            className="form-check-input"
+                        />
+                    ) : (
+                        <input 
+                            type="text" 
+                            value={data[fieldKey] ?? ''} 
+                            onChange={e => handleChange(e, fieldKey)} 
+                            className="form-control"
+                        />
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="json-editor">
             {Object.keys(data)
@@ -114,46 +171,32 @@ function RecursiveJsonEditor({ data, onChange, setWarningMessage }) {
                 <div key={key} className="mb-3">
                     {typeof data[key] === 'object' && data[key] !== null ? (
                         <div className="nested">
-                            <label className="form-label"><strong><u>{key}</u></strong></label>
-                            <RecursiveJsonEditor 
-                                data={data[key]} 
-                                onChange={(updatedValue) => handleNestedChange(key, updatedValue)} 
-                                setWarningMessage={setWarningMessage}
-                            />
+                            {isCollapsibleSection(key) ? (
+                                <button
+                                    type="button"
+                                    className="btn btn-link config-collapse-button"
+                                    onClick={() => toggleSection(key)}
+                                >
+                                    <span className={`config-collapse-arrow ${collapsedSections[key] ? 'collapsed' : ''}`}>▾</span>
+                                    <strong><u>{acceptedKeys[key]?.name || key}</u></strong>
+                                </button>
+                            ) : (
+                                <label className="form-label"><strong><u>{acceptedKeys[key]?.name || key}</u></strong></label>
+                            )}
+
+                            {(!isCollapsibleSection(key) || !collapsedSections[key]) && (
+                                <>
+                                    {key === 'data_loader' && hasDataLoaderSection && renderFieldRow('n_gpu', 'mt-2 mb-3')}
+                                    <RecursiveJsonEditor 
+                                        data={data[key]} 
+                                        onChange={(updatedValue) => handleNestedChange(key, updatedValue)} 
+                                        setWarningMessage={setWarningMessage}
+                                    />
+                                </>
+                            )}
                         </div>
                     ) : (
-                        key !== "resume_model" && <div className="row step3-json w-100">
-                            <div className="col-md-3">
-                                <label className="form-label">{acceptedKeys[key]["name"]}</label>
-                            </div>
-                            <div className="col-md-9">
-                                {acceptedKeys[key].options ? (
-                                    <select
-                                        value={data[key] || acceptedKeys[key].options[0]}
-                                        onChange={e => handleChange(e, key)}
-                                        className="form-select"
-                                    >
-                                        {acceptedKeys[key].options.map(option => (
-                                            <option key={option} value={option}>{option}</option>
-                                        ))}
-                                    </select>
-                                ) : acceptedKeys[key].type === 'bool' ? (
-                                    <input 
-                                        type="checkbox" 
-                                        checked={!!data[key]} 
-                                        onChange={e => handleChange(e, key)} 
-                                        className="form-check-input"
-                                    />
-                                ) : (
-                                    <input 
-                                        type="text" 
-                                        value={data[key]} 
-                                        onChange={e => handleChange(e, key)} 
-                                        className="form-control"
-                                    />
-                                )}
-                            </div>
-                        </div>
+                        key !== "resume_model" && !(key === 'n_gpu' && hasDataLoaderSection) && renderFieldRow(key)
                     )}
 
                     {/* Show "Resume Model" select dropdown only if "Resume" checkbox is true */}
@@ -339,9 +382,9 @@ function VA_API() {
             loadVideosAndDurations();
         }
 
-        if (currentStep === 2) {
-            evaluateDataset();
-        }
+        // if (currentStep === 2) {
+        //     evaluateDataset();
+        // }
 
         // warning
         if (warningMessage) {
@@ -353,16 +396,43 @@ function VA_API() {
         }
 
         // config
-        if (currentStep === 3 && !configData) {
-            getDefaultConfig().then((config) => {
-                setConfigData(config);
+        if (currentStep === 3) {
+            fetchConfigFiles().then((configs) => {
+                setConfigFiles(configs);
+
+                if (configs.length > 0 && !selectedConfigFile) {
+                    const preferredConfig = configs.includes('pouring/lac.json') ? 'pouring/lac.json' : configs[0];
+                    setSelectedConfigFile(preferredConfig);
+                    loadSelectedConfig(preferredConfig);
+                    return;
+                }
+
+                if (configs.length === 0 && !configData) {
+                    getDefaultConfig().then((config) => {
+                        setConfigData(config);
+                        setConfigFileName('Default');
+                    });
+                }
             });
         }
 
     }, [selectedDataset, currentStep, warningMessage]);
 
-    const nextStep = () => setCurrentStep(prevStep => prevStep + 1);
-    const prevStep = () => setCurrentStep(prevStep => Math.max(prevStep - 1, 1));
+    const nextStep = () => {
+        setCurrentStep((prevStep) => {
+            if (prevStep === 1) return 3;
+            if (prevStep === 3) return 4;
+            return prevStep;
+        });
+    };
+
+    const prevStep = () => {
+        setCurrentStep((prevStep) => {
+            if (prevStep === 4) return 3;
+            if (prevStep === 3) return 1;
+            return Math.max(prevStep - 1, 1);
+        });
+    };
 
     const [datasetGrade, setDatasetGrade] = useState(0);
     const handleWarning = () => {
@@ -414,8 +484,33 @@ function VA_API() {
 
     const [configData, setConfigData] = useState(null);
     const [configFileName, setConfigFileName] = useState('');
+    const [configFiles, setConfigFiles] = useState([]);
+    const [selectedConfigFile, setSelectedConfigFile] = useState('');
     const handleConfigChange = (updatedConfig) => {
         setConfigData(updatedConfig);
+    };
+
+    const loadSelectedConfig = async (configPath) => {
+        const selectedConfig = await fetchConfigFile(configPath);
+        if (selectedConfig) {
+            setConfigData(selectedConfig);
+            setConfigFileName(configPath);
+            setWarningMessage('');
+            return;
+        }
+
+        setWarningMessage('Failed to load selected configuration file.');
+    };
+
+    const handleConfigSelection = async (event) => {
+        const configPath = event.target.value;
+        setSelectedConfigFile(configPath);
+
+        if (!configPath) {
+            return;
+        }
+
+        await loadSelectedConfig(configPath);
     };
 
     const [savedDir, setSavedDir] = useState('./train-results');
@@ -575,7 +670,7 @@ function VA_API() {
                         </select>
                     </div>
 
-                    {/* STEP2 */}
+                    {/* STEP2
                     <div className={`step ${currentStep === 2 ? 'visible' : ''}`}>
                         <div className="d-flex justify-content-between align-items-center">
                             <h5>2. Dataset Quality</h5>
@@ -623,11 +718,12 @@ function VA_API() {
                             </ul>
                         </div>
                     </div>
+                    */}
 
-                    {/* STEP3 */}
+                    {/* STEP2 */}
                     <div className={`step ${currentStep === 3 ? 'visible' : ''}`}>
                         <div className="d-flex justify-content-between align-items-center">
-                            <h5>3. Configuration</h5>
+                            <h5>2. Configuration</h5>
                         </div>
 
                         <p>Configure the training settings according to your computer's hardware capabilities. 
@@ -638,6 +734,20 @@ function VA_API() {
                         <p>
                         You can resume training after adding more training files or if you want to improve performance from a previous checkpoint by providing the path to the saved model.
                         </p>
+
+                        <div className="mb-3">
+                            <label className="form-label">Choose a Configuration File</label>
+                            <select
+                                value={selectedConfigFile}
+                                onChange={handleConfigSelection}
+                                className="form-select"
+                            >
+                                <option value="">Select a configuration file</option>
+                                {configFiles.map((configPath) => (
+                                    <option key={configPath} value={configPath}>{configPath}</option>
+                                ))}
+                            </select>
+                        </div>
 
                         {configData && (
                             <div className="my-3 config-section">
@@ -653,10 +763,10 @@ function VA_API() {
                         )}
                     </div>
 
-                    {/* STEP4 */}
+                    {/* STEP3 */}
                     <div className={`step ${currentStep === 4 ? 'visible' : ''}`}>
                         <div className="d-flex justify-content-between align-items-center">
-                            <h5>4. Summary & Training</h5>
+                            <h5>3. Summary & Training</h5>
                             {isTrain && (
                                 <div className="loading-spinner">
                                     <div className="spinner-border" role="status">

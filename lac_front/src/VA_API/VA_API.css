@@ -69,18 +69,41 @@
     margin-top: 20px;
 }
 
-.step3-json input, .custom-input input {
+.step3-json input,
+.step3-json select,
+.step3-json textarea,
+.custom-input input {
     padding: 0.2rem 0 0.2rem 0.5rem;
-    background-color: unset;
-    color: white;
+    background-color: #fff !important;
+    color: #000 !important;
 }
 
-.step3-json input:focus, .custom-input input:focus {
+.step3-json input:focus,
+.step3-json select:focus,
+.step3-json textarea:focus,
+.custom-input input:focus {
     padding: 0.2rem 0 0.2rem 0.5rem;
-    background-color: unset;
-    color: white;
+    background-color: #fff !important;
+    color: #000 !important;
     border-color: #F78F26;
     box-shadow: none;
+}
+
+.step3-json .form-control,
+.step3-json .form-select,
+.step3-json .form-control:focus,
+.step3-json .form-select:focus,
+.step3-json .form-control::placeholder {
+    color: #000 !important;
+}
+
+.step3-json .form-select option {
+    color: #000;
+}
+
+.step3-json .form-label,
+.json-editor .form-label {
+    color: #000;
 }
 
 .config-section pre{
@@ -110,4 +133,41 @@
     padding: 1rem;
     word-wrap: break-word;
     overflow-x: auto;
+}
+
+.config-collapse-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    text-decoration: none;
+    padding: 0;
+    color: #000 !important;
+}
+
+.config-collapse-button,
+.config-collapse-button:hover,
+.config-collapse-button:focus,
+.config-collapse-button:active,
+.config-collapse-button:visited {
+    color: #000 !important;
+    text-decoration: none !important;
+}
+
+.config-collapse-button strong,
+.config-collapse-button u,
+.config-collapse-button span {
+    color: inherit !important;
+}
+
+.config-collapse-button:focus {
+    box-shadow: none;
+}
+
+.config-collapse-arrow {
+    display: inline-block;
+    transition: transform 0.2s ease;
+}
+
+.config-collapse-arrow.collapsed {
+    transform: rotate(-90deg);
 }

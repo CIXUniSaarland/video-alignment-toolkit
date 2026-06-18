@@ -191,6 +191,51 @@ const getDefaultConfig = async () => {
     }
 };
 
+const fetchConfigFiles = async () => {
+    try {
+        const response = await fetch(`${process.env.REACT_APP_API_HOST}/list_config_files`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        const data = await response.json();
+        if (data.message === 'success') {
+            return data.configs || [];
+        }
+
+        console.error('Failed to fetch config files:', data.error);
+        return [];
+    } catch (error) {
+        console.error('Error fetching config files:', error);
+        return [];
+    }
+};
+
+const fetchConfigFile = async (configPath) => {
+    try {
+        const response = await fetch(`${process.env.REACT_APP_API_HOST}/get_config_file`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ config_path: configPath }),
+        });
+
+        const data = await response.json();
+        if (data.message === 'success') {
+            return data.config;
+        }
+
+        console.error('Failed to fetch config file:', data.error);
+        return null;
+    } catch (error) {
+        console.error('Error fetching config file:', error);
+        return null;
+    }
+};
+
 const getVideoSrc = (video, selectedDataset, setVideoSrc) => {
     try {
         fetch(`${process.env.REACT_APP_API_HOST}/get_video`, {
@@ -326,5 +371,7 @@ export {
     getVideoSrc,
     getVideosSrc,
     getVideoFrameRate,
-    fetchFolderList
+    fetchFolderList,
+    fetchConfigFiles,
+    fetchConfigFile
 };
