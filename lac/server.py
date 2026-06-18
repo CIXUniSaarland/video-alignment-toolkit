@@ -554,6 +554,67 @@ def get_default_config():
         return jsonify({'message': 'success', 'config': config})
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
+
+@app.route('/list_config_files', methods=['GET'])
+def list_config_files():
+    """
+    List all JSON configuration files under the config directory.
+    Request:
+        GET /list_config_files
+    Returns:
+        A JSON response containing relative config file paths.
+    """
+    try:
+        config_root = 'config'
+        configs = []
+
+        for root, _, files in os.walk(config_root):
+            for file_name in files:
+                if file_name.endswith('.json'):
+                    abs_path = os.path.join(root, file_name)
+                    rel_path = os.path.relpath(abs_path, config_root)
+                    configs.append(rel_path.replace('\\', '/'))
+
+        configs.sort()
+        return jsonify({'message': 'success', 'configs': configs})
+    except Exception as e:
+        return jsonify({'message': 'error', 'error': str(e)})
+
+@app.route('/get_config_file', methods=['POST'])
+def get_config_file():
+    """
+    Load a JSON configuration file from the config directory.
+    Request:
+        POST /get_config_file
+        {
+            "config_path": "relative/path.json"
+        }
+    Returns:
+        A JSON response containing the config content.
+    """
+    try:
+        data = request.get_json()
+        logger.info(f"[POST /get_config_file] Request received with data: {data}")
+
+        config_path = data.get('config_path') if data else None
+        if not config_path:
+            return jsonify({'message': 'error', 'error': "Missing 'config_path' parameter."}), 400
+
+        config_root_abs = os.path.abspath('config')
+        requested_path_abs = os.path.abspath(os.path.join(config_root_abs, config_path))
+
+        if not requested_path_abs.startswith(config_root_abs + os.sep):
+            return jsonify({'message': 'error', 'error': 'Invalid config path.'}), 400
+
+        if not os.path.exists(requested_path_abs):
+            return jsonify({'message': 'error', 'error': 'Config file not found.'}), 404
+
+        with open(requested_path_abs, 'r') as f:
+            config = json.load(f)
+
+        return jsonify({'message': 'success', 'config': config, 'config_path': config_path})
+    except Exception as e:
+        return jsonify({'message': 'error', 'error': str(e)})
     
 @app.route('/get_model_options', methods=['POST'])
 def get_model_options():
