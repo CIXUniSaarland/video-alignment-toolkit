@@ -7,8 +7,18 @@
   align-items: center;
 }
 
+.video-player video {
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+  border-radius: 8px;
+  background: #000;
+  cursor: pointer;
+}
+
 .controls {
-  max-width: 100%;
+  width: 100%;
+  max-width: 480px;
   display: flex;
   align-items: center;
   margin-top: 10px;
@@ -20,8 +30,10 @@ button {
 
 .timeline {
   position: relative;
-  width: 600px;
+  flex: 1;
+  min-width: 0;
   height: 10px;
+  border-radius: 5px;
   background-color: #ccc;
   cursor: pointer;
 }

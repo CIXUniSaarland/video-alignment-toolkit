@@ -11,12 +11,12 @@ function Footer() {
     );
 }
 function Navbar() {
-    // When on the training page past step 1, intercept navigation and ask VA_API to
-    // confirm a reset first (VA_API publishes its step via window.__vatTrainingStep).
+    // A guarded page (Training, Align Videos, ...) sets window.__vatGuardActive when it
+    // has in-progress state; intercept nav so it can confirm leaving first.
     const guardNav = (e, dest) => {
-        if ((window.__vatTrainingStep || 1) > 1) {
+        if (window.__vatGuardActive) {
             e.preventDefault();
-            window.dispatchEvent(new CustomEvent('vat-training-leave', { detail: { dest } }));
+            window.dispatchEvent(new CustomEvent('vat-confirm-leave', { detail: { dest } }));
         }
     };
     return (

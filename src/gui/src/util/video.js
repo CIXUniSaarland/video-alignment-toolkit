@@ -57,7 +57,7 @@ function VideoPlayer({ videoSrc, frameRate, setCurrentFrameVideo }) {
 
     return (
         <div className="video-player">
-            <video ref={videoRef} src={videoSrc} width="400" height="400" />
+            <video ref={videoRef} src={videoSrc} onClick={handlePlayPause} />
             <div className="controls">
                 <button onClick={handlePlayPause} className="btn">
                     {isPlaying ? <i className="bi bi-pause-fill white"></i> : <i className="bi bi-play-fill white"></i>}

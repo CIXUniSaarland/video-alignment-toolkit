@@ -580,17 +580,17 @@ function VA_API() {
     const [pendingDest, setPendingDest] = useState(null);
     const navigate = useNavigate();
 
-    // Publish the current step so the header can decide whether to guard navigation.
-    useEffect(() => { window.__vatTrainingStep = currentStep; }, [currentStep]);
-    useEffect(() => () => { window.__vatTrainingStep = undefined; }, []);
+    // Guard navigation away while past step 1 (header/breadcrumb links check this flag).
+    useEffect(() => { window.__vatGuardActive = currentStep > 1; }, [currentStep]);
+    useEffect(() => () => { window.__vatGuardActive = false; }, []);
 
     useEffect(() => {
         const handler = (e) => {
             setPendingDest((e.detail && e.detail.dest) || null);
             setShowResetConfirm(true);
         };
-        window.addEventListener('vat-training-leave', handler);
-        return () => window.removeEventListener('vat-training-leave', handler);
+        window.addEventListener('vat-confirm-leave', handler);
+        return () => window.removeEventListener('vat-confirm-leave', handler);
     }, []);
 
     const closeResetConfirm = () => {

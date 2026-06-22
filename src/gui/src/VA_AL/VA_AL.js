@@ -137,13 +137,20 @@ const VA_AL2 = () => {
 }
 
 const Breadcrumbs = ({ breadcrumbs }) => {
+    // If the current page is guarded (in-progress), confirm before leaving.
+    const handleClick = (e, dest) => {
+        if (window.__vatGuardActive) {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('vat-confirm-leave', { detail: { dest } }));
+        }
+    };
     return (
         <nav aria-label="breadcrumb">
             <ol className="breadcrumb">
                 {breadcrumbs.map((breadcrumb, index) => (
                     <li key={index} className="breadcrumb-item">
                         {breadcrumb.link ? (
-                            <Link to={breadcrumb.link}>{breadcrumb.label}</Link>
+                            <Link to={breadcrumb.link} onClick={(e) => handleClick(e, breadcrumb.link)}>{breadcrumb.label}</Link>
                         ) : (
                             <span>{breadcrumb.label}</span>
                         )}

@@ -36,10 +36,6 @@ from PIL import Image
 import io
 
 from loguru import logger
-try:
-    from moviepy import VideoFileClip        # moviepy >= 2.0 (Python >= 3.9)
-except ImportError:                           # moviepy 1.x (e.g. Python 3.8)
-    from moviepy.editor import VideoFileClip
 
 from dataset.util import read_video
 from serverapi.frame_retr import frame_retr
@@ -58,6 +54,13 @@ from train_runner import run_training
 _mp_ctx = mp.get_context("spawn")
 training_process = None
 training_queue = None
+
+# (dataset, video) -> duration in seconds; avoids re-reading unchanged files.
+_duration_cache = {}
+
+# (dataset, video) -> decoded frames array, so repeated get_frame calls are fast.
+_frames_cache = {}
+_FRAMES_CACHE_MAX = 4
 
 @app.route('/')
 def hello():
@@ -115,23 +118,41 @@ def get_video_durations():
         A JSON response containing the durations of the videos.
     '''
     try:
+        import av
         data = request.get_json()
         videos = data['videos']
         dataset = data['dataset']
         videos_dir = f'../datasets/{dataset}/videos'
-        
+
         durations = {}
         for video in videos:
+            key = (dataset, video)
+            if key in _duration_cache:
+                durations[video] = _duration_cache[key]
+                continue
+
             video_path = os.path.join(videos_dir, video)
-            if os.path.exists(video_path) and video_path.endswith('.mp4'):
-                clip = VideoFileClip(video_path)
-                durations[video] = clip.duration
-                clip.close()
-            else:
-                durations[video] = "File not found or unsupported format"
-        
+            if not (os.path.isfile(video_path) and video.endswith('.mp4')):
+                durations[video] = None
+                continue
+
+            # Read duration from container metadata (fast — no full decode).
+            try:
+                with av.open(video_path) as container:
+                    if container.duration is not None:
+                        dur = float(container.duration) / av.time_base
+                    else:
+                        stream = container.streams.video[0]
+                        dur = float(stream.duration * stream.time_base)
+                durations[video] = round(dur, 2)
+                _duration_cache[key] = durations[video]
+            except Exception as e:
+                logger.warning(f"Could not read duration for {video}: {e}")
+                durations[video] = None
+
         return jsonify({'message': 'success', 'durations': durations})
     except Exception as e:
+        logger.exception("get_video_durations failed.")
         return jsonify({'message': 'error', 'error': str(e)})
 
 @app.route('/save_config', methods=['POST'])
@@ -433,11 +454,16 @@ def get_video_framerate():
                 return jsonify({'message': 'error', 'error': 'Missing dataset or video parameter'}), 400
 
         video_path = f'../datasets/{dataset}/videos/{video}'
-        clip = VideoFileClip(video_path)
-        test = read_video(video_path)
-        logger.info(f"{video}: {test.shape}, {clip.fps}")
-        return jsonify({'message': 'success', 'frame_rate': clip.fps})
+        if not os.path.isfile(video_path):
+            return jsonify({'message': 'error', 'error': 'Video file not found'}), 404
+        # Read fps from container metadata (fast — no full decode).
+        import av
+        with av.open(video_path) as container:
+            stream = container.streams.video[0]
+            fps = float(stream.average_rate) if stream.average_rate else 30.0
+        return jsonify({'message': 'success', 'frame_rate': fps})
     except Exception as e:
+        logger.exception("get_video_framerate failed.")
         return jsonify({'message': 'error', 'error': str(e)})
     
     
@@ -485,20 +511,30 @@ def get_frame():
     """
     try:
         data = request.get_json()
-        logger.info(f"[POST /get_frame] Request received with data: {data}")
         dataset = data['dataset']
         video = data['video']
-        frame = data['frame']
+        frame = int(data['frame'])
         video_path = f'../datasets/{dataset}/videos/{video}'
-        video = read_video(video_path)
-        frame = video[frame]
-        image = Image.fromarray(frame.astype('uint8'))
+
+        # Decode the video once and cache the frames; subsequent frame requests
+        # (e.g. hovering the alignment matrix) are then instant array lookups.
+        key = (dataset, video)
+        frames = _frames_cache.get(key)
+        if frames is None:
+            frames = read_video(video_path)
+            if len(_frames_cache) >= _FRAMES_CACHE_MAX:
+                _frames_cache.pop(next(iter(_frames_cache)))
+            _frames_cache[key] = frames
+
+        frame = max(0, min(frame, len(frames) - 1))
+        image = Image.fromarray(frames[frame].astype('uint8'))
         img_io = io.BytesIO()
         image.save(img_io, 'JPEG')
         img_io.seek(0)
 
         return Response(img_io, mimetype='image/jpeg')
     except Exception as e:
+        logger.exception("get_frame failed.")
         return jsonify({'message': 'error', 'error': str(e)})
     
 @app.route('/frame_retrieval', methods=['POST'])
