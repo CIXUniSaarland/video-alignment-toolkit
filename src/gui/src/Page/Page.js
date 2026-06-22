@@ -11,9 +11,17 @@ function Footer() {
     );
 }
 function Navbar() {
+    // When on the training page past step 1, intercept navigation and ask VA_API to
+    // confirm a reset first (VA_API publishes its step via window.__vatTrainingStep).
+    const guardNav = (e, dest) => {
+        if ((window.__vatTrainingStep || 1) > 1) {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('vat-training-leave', { detail: { dest } }));
+        }
+    };
     return (
         <nav className="navbar navbar-expand-lg px-5 py-3">
-            <a className="navbar-brand me-5" href="/">Video Alignment Toolkit</a>
+            <a className="navbar-brand me-5" href="/" onClick={(e) => guardNav(e, '/')}>Video Alignment Toolkit</a>
             <button className="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span className="navbar-toggler-icon"></span>
             </button>
@@ -24,6 +32,7 @@ function Navbar() {
                             className="nav-link"
                             to="/va-api"
                             activeClassName="active"
+                            onClick={(e) => guardNav(e, '/va-api')}
                         >
                             Training
                         </NavLink>
@@ -33,6 +42,7 @@ function Navbar() {
                             className="nav-link"
                             to="/va-analysis"
                             activeClassName="active"
+                            onClick={(e) => guardNav(e, '/va-analysis')}
                         >
                             Analysis
                         </NavLink>
@@ -42,6 +52,7 @@ function Navbar() {
                             className="nav-link"
                             to="/va-instruction"
                             activeClassName="active"
+                            onClick={(e) => guardNav(e, '/va-instruction')}
                         >
                             Instruction
                         </NavLink>

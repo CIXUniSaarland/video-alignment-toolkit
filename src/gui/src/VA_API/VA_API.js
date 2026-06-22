@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { 
     fetchDatasets, 
     fetchVideos, 
@@ -97,7 +99,15 @@ function RecursiveJsonEditor({ data, onChange, setWarningMessage }) {
     };
         
     const handleChange = (e, key) => {
-        const value = acceptedKeys[key].type === 'bool' ? e.target.checked : e.target.value;
+        // HTML inputs/selects return strings; keep int fields numeric for the backend.
+        let value;
+        if (acceptedKeys[key].type === 'bool') {
+            value = e.target.checked;
+        } else if (acceptedKeys[key].type === 'int') {
+            value = e.target.value === '' ? '' : Number(e.target.value);
+        } else {
+            value = e.target.value;
+        }
         onChange({ ...data, [key]: value });
         if (key === 'resume' && value) {
             fetchModelOptions();
@@ -228,76 +238,62 @@ const TrainingProgressBar = () => {
     const [progress, setProgress] = useState(0);
     const [remainingTime, setRemainingTime] = useState("Calculating...");
     const [loss, setLoss] = useState(null);
+    const [epoch, setEpoch] = useState(null);
 
     useEffect(() => {
         const socket = io(process.env.REACT_APP_API_HOST);
 
         socket.on('training_progress', (data) => {
-            if (data.progress !== undefined) {
-                setProgress(data.progress);
-            }
-            if (data.remaining_time) {
-                setRemainingTime(data.remaining_time);
-            }
-            if (data.loss !== undefined) {
-                setLoss(data.loss);
-            }
+            if (data.progress !== undefined) setProgress(data.progress);
+            if (data.remaining_time) setRemainingTime(data.remaining_time);
+            if (data.loss !== undefined) setLoss(data.loss);
+            if (data.epoch !== undefined) setEpoch(data.epoch);
         });
 
-        return () => {
-            socket.disconnect();
-        };
+        return () => socket.disconnect();
     }, []);
 
+    const pct = Math.min(100, Math.max(0, progress));
+
     return (
-        <div style={{ width: '100%', padding: '20px' }}>
-            <div style={{ marginBottom: '10px', fontSize: '18px' }}>
+        <div className="training-progress">
+            <div className="d-flex justify-content-between align-items-center mb-2">
                 <strong>Training Progress</strong>
+                <span className="training-progress-pct">{Math.round(pct)}%</span>
             </div>
-            <div style={{ position: 'relative', height: '30px', background: '#e0e0e0', borderRadius: '15px' }}>
+            <div className="progress" style={{ height: '20px' }}>
                 <div
-                    style={{
-                        width: `${progress}%`,
-                        height: '100%',
-                        background: progress >= 100 ? '#4caf50' : 'rgba(75,192,192,1)',
-                        borderRadius: '15px',
-                        transition: 'width 0.5s ease-in-out',
-                    }}
+                    className={`progress-bar ${pct >= 100 ? 'bg-success' : ''}`}
+                    role="progressbar"
+                    style={{ width: `${pct}%`, transition: 'width 0.3s ease' }}
+                    aria-valuenow={pct}
+                    aria-valuemin="0"
+                    aria-valuemax="100"
                 />
-                <div
-                    style={{
-                        position: 'absolute',
-                        top: '0',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        color: '#fff',
-                        fontWeight: 'bold',
-                    }}
-                >
-                    {Math.round(progress)}%
-                </div>
             </div>
-            <div style={{ marginTop: '10px', fontSize: '16px' }}>
-                <div><strong>Estimated Remaining Time:</strong> {remainingTime}</div>
-                {loss !== null && (
-                    <div><strong>Current Loss:</strong> {loss.toFixed(4)}</div>
-                )}
+            <div className="training-progress-stats mt-2">
+                <div><span>Remaining</span><strong>{remainingTime}</strong></div>
+                {epoch !== null && <div><span>Epoch</span><strong>{epoch}</strong></div>}
+                {loss !== null && <div><span>Current Loss</span><strong>{loss.toFixed(4)}</strong></div>}
             </div>
         </div>
     );
 };
 
+const MAX_POINTS = 300; // rolling window so long runs stay responsive
+
 const LossChart = () => {
     const [lossData, setLossData] = useState([]);
-    const [epochData, setEpochData] = useState([]);
+    const [stepData, setStepData] = useState([]);
 
     useEffect(() => {
         const socket = io(process.env.REACT_APP_API_HOST);
 
         socket.on('training_progress', (data) => {
-            if (data.loss !== undefined && data.epoch !== undefined) {
-                setLossData((prevLossData) => [...prevLossData, data.loss]);
-                setEpochData((prevEpochData) => [...prevEpochData, data.epoch]);
+            // Plot per batch/step (the per-epoch emit has no `step`, so it's skipped).
+            if (data.step !== undefined && data.loss !== undefined) {
+                setLossData((prev) => [...prev, data.loss].slice(-MAX_POINTS));
+                setStepData((prev) => [...prev, data.step].slice(-MAX_POINTS));
             }
         });
 
@@ -307,34 +303,25 @@ const LossChart = () => {
     }, []);
 
     const data = {
-        labels: epochData, // X-axis labels (Epochs)
+        labels: stepData,
         datasets: [
             {
-                label: 'Loss',
-                data: lossData, // Y-axis values (Loss)
+                label: 'Loss (per step)',
+                data: lossData,
                 fill: false,
                 backgroundColor: 'rgba(75,192,192,0.4)',
                 borderColor: 'rgba(75,192,192,1)',
                 tension: 0.1,
+                pointRadius: 0,
             },
         ],
     };
 
     const options = {
+        animation: false,
         scales: {
-            x: {
-                title: {
-                    display: true,
-                    text: 'Epoch',
-                },
-            },
-            y: {
-                title: {
-                    display: true,
-                    text: 'Loss',
-                },
-                beginAtZero: true,
-            },
+            x: { title: { display: true, text: 'Step' } },
+            y: { title: { display: true, text: 'Loss' }, beginAtZero: true },
         },
     };
 
@@ -345,6 +332,53 @@ const LossChart = () => {
     );
 };
 
+// Pretty, readable rendering of the configuration object for the summary step.
+// Scalars are shown as a flat list; nested objects (data_loader, trainer, loss, ...)
+// become titled groups of key/value rows.
+function ConfigSummary({ config }) {
+    if (!config) return null;
+
+    const prettyKey = (k) =>
+        k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+    const renderValue = (v) => {
+        if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+        if (v === null || v === undefined || v === '') return '—';
+        if (typeof v === 'object') return JSON.stringify(v);
+        return String(v);
+    };
+
+    const entries = Object.entries(config).filter(([k]) => k !== 'cfg_path');
+    const scalars = entries.filter(([, v]) => typeof v !== 'object' || v === null);
+    const groups = entries.filter(([, v]) => typeof v === 'object' && v !== null);
+
+    return (
+        <div className="config-pretty">
+            {scalars.length > 0 && (
+                <div className="config-pretty-group">
+                    {scalars.map(([k, v]) => (
+                        <div className="config-pretty-row" key={k}>
+                            <span className="config-pretty-key">{prettyKey(k)}</span>
+                            <span className="config-pretty-val">{renderValue(v)}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+            {groups.map(([section, vals]) => (
+                <div className="config-pretty-group" key={section}>
+                    <div className="config-pretty-title">{prettyKey(section)}</div>
+                    {Object.entries(vals).map(([k, v]) => (
+                        <div className="config-pretty-row" key={k}>
+                            <span className="config-pretty-key">{prettyKey(k)}</span>
+                            <span className="config-pretty-val">{renderValue(v)}</span>
+                        </div>
+                    ))}
+                </div>
+            ))}
+        </div>
+    );
+}
+
 function VA_API() {
     const [currentStep, setCurrentStep] = useState(1);
     const [loading, setLoading] = useState(false);
@@ -354,69 +388,78 @@ function VA_API() {
     const [selectedDataset, setSelectedDataset] = useState('');
     const [warningMessage, setWarningMessage] = useState('');
 
+    // Load the list of datasets once on mount.
     useEffect(() => {
-        const loadDatasets = async () => {
-            const fetchedDatasets = await fetchDatasets();
-            setDatasets(fetchedDatasets);
-        };
+        let cancelled = false;
+        fetchDatasets().then((fetched) => {
+            if (!cancelled) setDatasets(fetched);
+        });
+        return () => { cancelled = true; };
+    }, []);
 
-        const loadVideosAndDurations = async () => {
-            if (!selectedDataset) return;
-
-            setLoading(true);
-            const fetchedVideos = await fetchVideos(selectedDataset);
+    // Load videos + durations whenever the selected dataset changes.
+    // `loading` stays true until BOTH the file list AND the durations are in, so
+    // the user cannot advance to the next step mid-load. The `cancelled` flag stops
+    // a slow previous dataset from overwriting a newer selection (race condition).
+    useEffect(() => {
+        if (!selectedDataset) {
+            setVideos([]);
+            setVideoDurations({});
             setLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setLoading(true);
+        setVideos([]);          // clear stale list immediately
+        setVideoDurations({});
+
+        (async () => {
+            const fetchedVideos = await fetchVideos(selectedDataset);
+            if (cancelled) return;
             setVideos(fetchedVideos);
 
             if (fetchedVideos.length > 0) {
                 const fetchedDurations = await fetchVideoDurations(selectedDataset, fetchedVideos);
+                if (cancelled) return;
                 setVideoDurations(fetchedDurations);
             }
-        };
+            if (!cancelled) setLoading(false);
+        })();
 
-        // Fetch datasets on initial render
-        loadDatasets();
+        return () => { cancelled = true; };
+    }, [selectedDataset]);
 
-        // Fetch videos and durations when selectedDataset changes
-        if (selectedDataset) {
-            loadVideosAndDurations();
-        }
+    // Load configuration files when entering the configuration step.
+    useEffect(() => {
+        if (currentStep !== 3) return;
+        let cancelled = false;
+        fetchConfigFiles().then((configs) => {
+            if (cancelled) return;
+            setConfigFiles(configs);
 
-        // if (currentStep === 2) {
-        //     evaluateDataset();
-        // }
-
-        // warning
-        if (warningMessage) {
-            const timer = setTimeout(() => {
-                setWarningMessage('');
-            }, 5000);
-
-            return () => clearTimeout(timer);
-        }
-
-        // config
-        if (currentStep === 3) {
-            fetchConfigFiles().then((configs) => {
-                setConfigFiles(configs);
-
-                if (configs.length > 0 && !selectedConfigFile) {
-                    const preferredConfig = configs.includes('pouring/lac.json') ? 'pouring/lac.json' : configs[0];
-                    setSelectedConfigFile(preferredConfig);
-                    loadSelectedConfig(preferredConfig);
-                    return;
-                }
-
-                if (configs.length === 0 && !configData) {
-                    getDefaultConfig().then((config) => {
+            if (configs.length > 0 && !selectedConfigFile) {
+                const preferredConfig = configs.includes('pouring/lac.json') ? 'pouring/lac.json' : configs[0];
+                setSelectedConfigFile(preferredConfig);
+                loadSelectedConfig(preferredConfig);
+            } else if (configs.length === 0 && !configData) {
+                getDefaultConfig().then((config) => {
+                    if (!cancelled) {
                         setConfigData(config);
                         setConfigFileName('Default');
-                    });
-                }
-            });
-        }
+                    }
+                });
+            }
+        });
+        return () => { cancelled = true; };
+    }, [currentStep]);
 
-    }, [selectedDataset, currentStep, warningMessage]);
+    // Auto-dismiss the warning banner after 5 seconds.
+    useEffect(() => {
+        if (!warningMessage) return;
+        const timer = setTimeout(() => setWarningMessage(''), 5000);
+        return () => clearTimeout(timer);
+    }, [warningMessage]);
 
     const nextStep = () => {
         setCurrentStep((prevStep) => {
@@ -461,26 +504,19 @@ function VA_API() {
         setWarningMessage('');
     };
 
-    const [activityCount, setActivityCount] = useState(0);
-    function evaluateDataset() {
-        // DUMMY
-        // TODO: CHANGE LATER
-        console.log(activityCount);
-        const totalDuration = Object.values(videoDurations).reduce((sum, duration) => sum + duration, 0);
-        const numVideos = videos.length;
-        const maxDuration = 3600;
-        const maxActivities = 5; 
-
-        let score = 0;
-        // Evaluate number of videos
-        score += Math.min(4, (numVideos / 10) * 4);
-        // Evaluate total duration
-        score += Math.min(3, (totalDuration / maxDuration) * 3);
-        // Evaluate number of activities
-        score += Math.min(3, (activityCount / maxActivities) * 3);
-
-        setDatasetGrade(score.toFixed(1));
-    };
+    // Dataset quality grade (0–10), based on the number of videos in the dataset.
+    // The paper finds ~25 videos is typically enough for good results, and accuracy
+    // keeps improving up to ~50+. We map that guidance onto the score:
+    //   0 videos -> 0, 25 videos -> 7 ("recommended"), 50+ videos -> 10.
+    useEffect(() => {
+        const n = videos.length;
+        let grade;
+        if (n <= 0) grade = 0;
+        else if (n >= 50) grade = 10;
+        else if (n >= 25) grade = 7 + ((n - 25) / 25) * 3; // 25 -> 7, 50 -> 10
+        else grade = (n / 25) * 7;                          // 0 -> 0, 25 -> 7
+        setDatasetGrade(Number(grade.toFixed(1)));
+    }, [videos]);
 
     const [configData, setConfigData] = useState(null);
     const [configFileName, setConfigFileName] = useState('');
@@ -513,8 +549,11 @@ function VA_API() {
         await loadSelectedConfig(configPath);
     };
 
-    const [savedDir, setSavedDir] = useState('./train-results');
-    const [isSameDirectory, setIsSameDirectory] = useState(false);
+    // Save each run's config + checkpoints + logs together under the repo-root
+    // train-results/ folder (cwd at runtime is the lac/ submodule, so '../').
+    // isSameDirectory=true makes the backend point save_dir/log_dir/loguru_dir there too.
+    const [savedDir, setSavedDir] = useState('../train-results');
+    const [isSameDirectory, setIsSameDirectory] = useState(true);
     const [isTrain, setIsTrain] = useState(false);
     const [logs, setLogs] = useState('');
     function startTraining() {
@@ -535,6 +574,51 @@ function VA_API() {
         stopTrainingSocket();
         setIsTrain(false);
     }
+
+    // Reset-confirmation flow, triggered when leaving training (header links / logo).
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [pendingDest, setPendingDest] = useState(null);
+    const navigate = useNavigate();
+
+    // Publish the current step so the header can decide whether to guard navigation.
+    useEffect(() => { window.__vatTrainingStep = currentStep; }, [currentStep]);
+    useEffect(() => () => { window.__vatTrainingStep = undefined; }, []);
+
+    useEffect(() => {
+        const handler = (e) => {
+            setPendingDest((e.detail && e.detail.dest) || null);
+            setShowResetConfirm(true);
+        };
+        window.addEventListener('vat-training-leave', handler);
+        return () => window.removeEventListener('vat-training-leave', handler);
+    }, []);
+
+    const closeResetConfirm = () => {
+        setShowResetConfirm(false);
+        setPendingDest(null);
+    };
+
+    const confirmReset = () => {
+        if (isTrain) stopTrainingSocket();
+        setCurrentStep(1);
+        setSelectedDataset('');
+        setVideos([]);
+        setVideoDurations([]);
+        setConfigData(null);
+        setConfigFileName('');
+        setSelectedConfigFile('');
+        setConfigFiles([]);
+        setIsTrain(false);
+        setLogs('');
+        setWarningMessage('');
+        setUploadedFile(null);
+        setDatasetGrade(0);
+        setShowResetConfirm(false);
+        if (pendingDest && pendingDest !== '/va-api') {
+            navigate(pendingDest);
+        }
+        setPendingDest(null);
+    };
 
     const [uploadedFile, setUploadedFile] = useState(null);
 
@@ -571,8 +655,12 @@ function VA_API() {
         }
     };
 
-    // next button: disabled
-    const isDisabled = (!selectedDataset && currentStep === 1) || loading || (!configData && currentStep === 3);
+    // Next button disabled conditions:
+    //  Step 1 — no dataset selected, still loading, or the dataset has no videos.
+    //  Step 3 — no configuration loaded yet.
+    const isDisabled =
+        (currentStep === 1 && (!selectedDataset || loading || videos.length === 0)) ||
+        (currentStep === 3 && !configData);
     
     return (
         <div className="w-100">
@@ -583,10 +671,48 @@ function VA_API() {
             </div>
 
             {warningMessage && (
-                <div className="alert alert-warning alert-dismissible fade show position-fixed top-3 end-0 mt-5 me-3" role="alert">
-                    {warningMessage}    
+                <div
+                    className="alert alert-warning alert-dismissible fade show position-fixed top-0 end-0 m-3"
+                    role="alert"
+                    style={{ zIndex: 1080, maxWidth: '360px' }}
+                >
+                    {warningMessage}
                     <button type="button" className="btn-close" aria-label="Close" onClick={handleDismissWarning}></button>
                 </div>
+            )}
+
+            {showResetConfirm && createPortal(
+                <div
+                    onClick={closeResetConfirm}
+                    style={{
+                        position: 'fixed', inset: 0, zIndex: 2000,
+                        background: 'rgba(0,0,0,0.5)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: '#fff', color: '#000', borderRadius: '8px',
+                            width: '90%', maxWidth: '440px',
+                            boxShadow: '0 10px 40px rgba(0,0,0,0.3)', overflow: 'hidden',
+                        }}
+                    >
+                        <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #e0e0e0', fontWeight: 600, fontSize: '1.1rem' }}>
+                            Reset training?
+                        </div>
+                        <div style={{ padding: '1.25rem' }}>
+                            Are you sure you want to reset everything?
+                            {isTrain && ' This will stop the running training.'}
+                            {' '}Your dataset selection and configuration will be cleared.
+                        </div>
+                        <div style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid #e0e0e0', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                            <button type="button" className="btn btn-secondary" onClick={closeResetConfirm}>Cancel</button>
+                            <button type="button" className="btn btn-danger" onClick={confirmReset}>Yes, reset</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
 
             <div className="row">
@@ -631,15 +757,48 @@ function VA_API() {
                             )}
                         </div>
 
-                        <p>Select a previous uploaded dataset or upload a new one. For uploading, zip the dataset with all the videos inside a single folder.</p>
+                        <p>There are <strong>two ways</strong> to choose a dataset for training. Use either one.</p>
 
-                        {/* File Upload Input */}
-                        <div className="mb-3">
-                            <label htmlFor="datasetUpload" className="form-label">Upload a Dataset:</label>
+                        {/* OPTION 1 — pick an existing dataset */}
+                        <div className="dataset-option">
+                            <div className="dataset-option-head">
+                                <span className="dataset-option-badge">Option 1</span>
+                                <span className="dataset-option-title">Select an existing dataset</span>
+                            </div>
+                            <p className="dataset-option-desc">
+                                Datasets already placed in the server's <code>datasets/</code> folder appear here.
+                            </p>
+                            <select
+                                value={selectedDataset}
+                                onChange={e => {
+                                    setSelectedDataset(e.target.value);
+                                    setWarningMessage('');
+                                }}
+                                className="form-select"
+                            >
+                                <option value="">Select a Dataset</option>
+                                {datasets.map((dataset, index) => (
+                                    <option key={index} value={dataset}>{dataset}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="dataset-option-or"><span>OR</span></div>
+
+                        {/* OPTION 2 — upload a new dataset (zip) */}
+                        <div className="dataset-option">
+                            <div className="dataset-option-head">
+                                <span className="dataset-option-badge">Option 2</span>
+                                <span className="dataset-option-title">Upload a new dataset (.zip)</span>
+                            </div>
+                            <p className="dataset-option-desc">
+                                Zip your dataset with all the videos inside a single folder, then upload it here.
+                            </p>
                             <div className="d-flex justify-content-between align-items-center gap-2">
                                 <input
                                     type="file"
                                     id="datasetUpload"
+                                    accept=".zip"
                                     className="form-control"
                                     onChange={e => setUploadedFile(e.target.files[0])}
                                 />
@@ -654,20 +813,13 @@ function VA_API() {
                             {uploadedFile && <p className="text-success mt-2">Selected: {uploadedFile.name}</p>}
                         </div>
 
-                        {/* Dataset Selection Dropdown */}
-                        <select
-                            value={selectedDataset}
-                            onChange={e => {
-                                setSelectedDataset(e.target.value);
-                                setWarningMessage('');
-                            }}
-                            className="form-select"
-                        >
-                            <option value="">Select a Dataset</option>
-                            {datasets.map((dataset, index) => (
-                                <option key={index} value={dataset}>{dataset}</option>
-                            ))}
-                        </select>
+                        {/* Paper rule: warn when a selected dataset has fewer than 25 videos */}
+                        {selectedDataset && !loading && videos.length > 0 && videos.length < 25 && (
+                            <div className="alert alert-warning mt-3 mb-0 py-2">
+                                ⚠ This dataset has only <strong>{videos.length}</strong> videos. The toolkit
+                                recommends <strong>at least 25</strong> for good results — it may be too small.
+                            </div>
+                        )}
                     </div>
 
                     {/* STEP2
@@ -735,7 +887,7 @@ function VA_API() {
                         You can resume training after adding more training files or if you want to improve performance from a previous checkpoint by providing the path to the saved model.
                         </p>
 
-                        <div className="mb-3">
+                        <div className="vat-card mb-3">
                             <label className="form-label">Choose a Configuration File</label>
                             <select
                                 value={selectedConfigFile}
@@ -750,7 +902,7 @@ function VA_API() {
                         </div>
 
                         {configData && (
-                            <div className="my-3 config-section">
+                            <div className="vat-card my-3 config-section">
                                 {/* <h4>Editing: {configFileName}</h4> */}
                                 <form>
                                     <RecursiveJsonEditor 
@@ -776,17 +928,47 @@ function VA_API() {
                             )}
                         </div>
                         <p>Here is a summary of the settings. If you are sure, you can click the 'Train' button below.</p>
-                        
-                        <div className="summary w-100">
-                            <h6>Dataset: {selectedDataset}</h6>
-                            <h6>Number of Videos: {videos.length}</h6>
-                            <h6>Dataset Quality Grade: {datasetGrade} / 10</h6>
 
-                            <h6>Config File: {configFileName}</h6>
+                        <div className="summary w-100">
+                            <div className="summary-facts">
+                                <div className="summary-fact">
+                                    <span className="summary-fact-label">Dataset</span>
+                                    <span className="summary-fact-value">{selectedDataset || '—'}</span>
+                                </div>
+                                <div className="summary-fact">
+                                    <span className="summary-fact-label">Number of Videos</span>
+                                    <span className="summary-fact-value">{videos.length}</span>
+                                </div>
+                                <div className="summary-fact">
+                                    <span className="summary-fact-label">Config File</span>
+                                    <span className="summary-fact-value">{configFileName || '—'}</span>
+                                </div>
+                            </div>
+
+                            <div className="summary-grade">
+                                <div className="d-flex justify-content-between align-items-center">
+                                    <span className="summary-fact-label">Dataset Quality Grade</span>
+                                    <span className="summary-grade-number">{datasetGrade} / 10</span>
+                                </div>
+                                <div className="progress mt-1" style={{ height: '10px' }}>
+                                    <div
+                                        className={`progress-bar ${datasetGrade >= 7 ? 'bg-success' : datasetGrade >= 4 ? 'bg-warning' : 'bg-danger'}`}
+                                        role="progressbar"
+                                        style={{ width: `${(datasetGrade / 10) * 100}%` }}
+                                        aria-valuenow={datasetGrade}
+                                        aria-valuemin="0"
+                                        aria-valuemax="10"
+                                    />
+                                </div>
+                                <small className="text-muted">
+                                    Based on the number of videos — ~25 is recommended, 50+ is ideal.
+                                </small>
+                            </div>
+
                             {configData && (
-                                <div className="config-section">
-                                    <h6>Configuration:</h6>
-                                    <pre>{JSON.stringify(configData, null, 2)}</pre>
+                                <div className="config-section mt-3">
+                                    <h6>Configuration</h6>
+                                    <ConfigSummary config={configData} />
                                 </div>
                             )}
                         </div>
@@ -835,34 +1017,55 @@ function VA_API() {
                     </div>
                 </div>
 
-                <div className={`col-md-6 ${currentStep <= 3 ? 'video-list' : ''}`}  style={{ height: '30vh' }}>
-                    <div className="row w-100">
-                            {currentStep <= 3 && videos.map((video, index) => (
-                                <li key={index} className="list-group-item">
-                                    <div className="row">
-                                        <div className="col-md-8">
-                                            {video}
-                                        </div>
-                                        <div className="col-md-4 text-end">
-                                            {videoDurations[video] && (
-                                                <span>{videoDurations[video].toFixed(2)}s</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </li>
-                            ))}
-                            {currentStep === 4 && (
-                                <div className="logs w-100" id="logs">
-                                    <TrainingProgressBar />
-                                    <LossChart />
-
-                                    <h5>Training Logs:</h5>
-                                    <pre style={{ overflowY: 'auto', maxHeight: '300px' }}>
-                                        {logs}
-                                    </pre>
-                                </div>
+                <div className="col-md-6">
+                    {currentStep <= 3 && (
+                        <div className="dataset-files">
+                            <div className="dataset-files-header">
+                                <strong>Files in dataset</strong>
+                                <span className="badge bg-secondary">{videos.length}</span>
+                            </div>
+                            {videos.length === 0 ? (
+                                <p className="dataset-files-empty">
+                                    {selectedDataset
+                                        ? 'No videos found in this dataset.'
+                                        : 'Select a dataset to see its files.'}
+                                </p>
+                            ) : (
+                                <ul className="list-group video-file-list">
+                                    {videos.map((video, index) => (
+                                        <li
+                                            key={index}
+                                            className="list-group-item d-flex justify-content-between align-items-center"
+                                        >
+                                            <span className="video-name" title={video}>
+                                                <span className="video-index">{index + 1}.</span> {video}
+                                            </span>
+                                            <span className="video-duration">
+                                                {videoDurations[video]
+                                                    ? `${videoDurations[video].toFixed(2)}s`
+                                                    : '—'}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
                             )}
-                    </div>
+                        </div>
+                    )}
+                    {currentStep === 4 && (
+                        <div className="w-100" id="logs">
+                            <div className="vat-card mb-3">
+                                <TrainingProgressBar />
+                            </div>
+                            <div className="vat-card mb-3">
+                                <h6 className="mb-2">Loss</h6>
+                                <LossChart />
+                            </div>
+                            <div className="vat-card">
+                                <h6 className="mb-2">Training Logs</h6>
+                                <pre className="training-log">{logs || 'Waiting for training to start…'}</pre>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

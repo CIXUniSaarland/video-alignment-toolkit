@@ -70,11 +70,13 @@ def align(dataset, directory, video1, video2, device="cuda", name=""):
     os.makedirs(os.path.join(outdir, f"{video1_name}_{video2_name}"), exist_ok=True)
     output_path = os.path.join(outdir, f"{video1_name}_{video2_name}/data.json")
 
-    # if the data file already exists, return it
+    # if the data file already exists (and has a cost matrix), return it
     if os.path.exists(output_path):
-        logger.info(f"Data file already exists at {output_path}")
         data = json.load(open(output_path))
-        return data
+        if data.get("acc_cost_mat") is not None:
+            logger.info(f"Data file already exists at {output_path}")
+            return data
+        logger.info("Cached alignment is stale (no cost matrix); recomputing.")
 
     # get each embeddings
     model = model_dict[cfg.arch.type](cfg)
@@ -131,16 +133,19 @@ def align(dataset, directory, video1, video2, device="cuda", name=""):
     d, path = fastdtw(embs1, embs2, dist=dist_fn)
     path = torch.tensor(path)
 
-    # normalized_acc_cost_mat = acc_cost_mat / acc_cost_mat.max()
-    # normalized_acc_cost_mat = [[float(f"{x:.3f}") for x in y] for y in normalized_acc_cost_mat.tolist()]
+    # Pairwise distance matrix (T1 x T2) for the heatmap, normalized to [0, 1].
+    e1 = embs1.detach().cpu().numpy() if torch.is_tensor(embs1) else np.asarray(embs1)
+    e2 = embs2.detach().cpu().numpy() if torch.is_tensor(embs2) else np.asarray(embs2)
+    cost = cdist(e1, e2)
+    cost = (cost - cost.min()) / (cost.max() - cost.min() + 1e-8)
+    acc_cost_mat = [[round(float(v), 4) for v in row] for row in cost.tolist()]
 
     data = {
         "v1": video1_name,
         "v2": video2_name,
-        "path": path.T.tolist(),
-        "acc_cost_mat": None,
-        # "acc_cost_mat": normalized_acc_cost_mat,
-        "dtw_cost": d
+        "path": path.tolist(),
+        "acc_cost_mat": acc_cost_mat,
+        "dtw_cost": float(d)
     }
     with open(output_path, 'w') as f:
         json.dump(data, f)

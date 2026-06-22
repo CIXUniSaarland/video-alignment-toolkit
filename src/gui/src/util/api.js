@@ -118,11 +118,7 @@ const startWebSocketConnection = (config, setLogs, setIsTrain) => {
             setLogs((prevLogs) => prevLogs + '\n' + data.data);
         }
 
-        if (data.match) {
-            
-        }
-
-        if (data.error) {
+        if (data.error || data.stopped || (data.data && data.data.includes('Training completed'))) {
             setIsTrain(false);
         }
     });

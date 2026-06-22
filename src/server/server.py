@@ -1,3 +1,29 @@
+import os
+import sys
+
+# Prevent the OpenMP duplicate-runtime abort (torch + MKL). Must precede torch import.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
+# --- Locate the LAC research core (git submodule at <repo-root>/lac) -------------
+# This file lives in <repo-root>/src/server/, while the encoders, datasets,
+# evaluation, utils and configs live in the `lac` submodule. Put the submodule on
+# the import path so `from dataset/model/utils/evaluation import ...` resolve, and
+# chdir into it so the original relative paths (../datasets, config/...) keep working.
+_SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.abspath(os.path.join(_SERVER_DIR, "..", ".."))
+_LAC_CORE = os.path.join(_REPO_ROOT, "lac")
+for _p in (_LAC_CORE, _SERVER_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+# Make this script's path absolute before the chdir so the reloader and
+# multiprocessing 'spawn' can re-locate it (they resolve it relative to cwd).
+sys.argv[0] = os.path.abspath(sys.argv[0])
+_main = sys.modules.get("__main__")
+if getattr(_main, "__file__", None):
+    _main.__file__ = os.path.abspath(_main.__file__)
+os.chdir(_LAC_CORE)
+# --------------------------------------------------------------------------------
+
 import json
 from flask import Flask, Response, request, jsonify, stream_with_context, send_from_directory, url_for
 from flask_cors import CORS
@@ -8,11 +34,12 @@ from datetime import datetime
 import re
 from PIL import Image
 import io
-from train_toolkit import train_model
 
 from loguru import logger
-from moviepy import VideoFileClip
-from utils.parser import load_config_file
+try:
+    from moviepy import VideoFileClip        # moviepy >= 2.0 (Python >= 3.9)
+except ImportError:                           # moviepy 1.x (e.g. Python 3.8)
+    from moviepy.editor import VideoFileClip
 
 from dataset.util import read_video
 from serverapi.frame_retr import frame_retr
@@ -23,8 +50,14 @@ app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Training process
+# Training runs in a child process so it can be terminated cleanly (frees GPU memory).
+import threading
+import queue as _queue
+import multiprocessing as mp
+from train_runner import run_training
+_mp_ctx = mp.get_context("spawn")
 training_process = None
+training_queue = None
 
 @app.route('/')
 def hello():
@@ -173,32 +206,22 @@ def train():
     Returns:
         A JSON response containing the success message.
     """
-    global training_process
+    global training_process, training_queue
     try:
         data = request.get_json()
         logger.info(f"[POST /train] Request received with data: {data}")
-        config = load_config_file(data['config'])
-        # args = f"--config='{config}'"
-        
-        # Use subprocess.Popen instead of subprocess.run to non-blockingly handle the process
-        # training_process = subprocess.Popen(
-        #     f"source ~/anaconda3/etc/profile.d/conda.sh && conda activate lac && python train.py {args}",
-        #     shell=True, 
-        #     stdout=subprocess.PIPE, 
-        #     stderr=subprocess.PIPE, 
-        #     executable='/bin/zsh'
-        # )
+        config_path = data['config']
 
-        loss_list = []
+        # Stop any previous run before starting a new one.
+        _terminate_training()
 
-        def train_and_stream():
-            train_model(config, socketio)
-            socketio.emit('training_progress', {'data': 'Training completed successfully.'})
+        training_queue = _mp_ctx.Queue()
+        training_process = _mp_ctx.Process(
+            target=run_training, args=(config_path, training_queue), daemon=True)
+        training_process.start()
 
-        import threading
-        # Run training in a separate thread
-        training_thread = threading.Thread(target=train_and_stream, daemon=True)
-        training_thread.start()
+        # Forward the child's progress queue to the websocket.
+        threading.Thread(target=_pump_logs, args=(training_process, training_queue), daemon=True).start()
 
         return jsonify({'message': 'Training started'})
 
@@ -206,61 +229,33 @@ def train():
         logger.exception("Failed to start training process.")
         return jsonify({'message': 'error', 'error': str(e)})
 
-        # def stream_process(process):
-        #     for line in iter(process.stdout.readline, b''):
-        #         line_decoded = line.decode().strip()
-        #         logger.info(line_decoded)
 
-        #         match = re.match(r"Epoch: (\d+) / (\d+), Loss: ([\d\.]+), Time: (.+)", line_decoded)
-        #         if match:
-        #             logger.info("Matched")
-        #             epoch = int(match.group(1))
-        #             total_epochs = int(match.group(2))
-        #             loss = float(match.group(3))
-        #             time_elapsed = match.group(4) 
-        #             time_elapsed_obj = datetime.strptime(time_elapsed, "%H:%M:%S.%f") - datetime.strptime("00:00:00.0", "%H:%M:%S.%f")
+def _pump_logs(proc, q):
+    while True:
+        try:
+            event, payload = q.get(timeout=1)
+        except _queue.Empty:
+            if not proc.is_alive():
+                break
+            continue
+        if event == "__done__":
+            break
+        socketio.emit(event, payload)
 
-        #             progress = (epoch / total_epochs) * 100
-        #             if progress > 0:
-        #                 # Calculate remaining time
-        #                 estimated_total_time = time_elapsed_obj / (progress / 100)
-        #                 remaining_time = estimated_total_time - time_elapsed_obj
 
-        #                 remaining_time = str(remaining_time).split(".")[0]
-        #             else:
-        #                 remaining_time = "Calculating..."
+def _terminate_training():
+    """Terminate the training child process if running (frees its GPU memory)."""
+    global training_process
+    proc = training_process
+    if proc is not None and proc.is_alive():
+        proc.terminate()
+        proc.join(timeout=10)
+        if proc.is_alive():
+            proc.kill()
+            proc.join(timeout=5)
+    training_process = None
 
-        #             loss_list.append(loss)
 
-        #             socketio.emit('training_progress', {
-        #                 'data': line_decoded,
-        #                 'match': True,
-        #                 'epoch': epoch,
-        #                 'loss': loss,
-        #                 'loss_list': loss_list,
-        #                 'time': time_elapsed,
-        #                 'progress': progress,
-        #                 'remaining_time': remaining_time
-        #             })
-        #         else:
-        #             socketio.emit('training_progress', {'data': line_decoded})
-
-        #     process.stdout.close()
-        #     return_code = process.wait()
-        #     if return_code == 0:
-        #         socketio.emit('training_progress', {'data': 'Training completed successfully.'})
-        #     else:
-        #         socketio.emit('training_progress', {'data': 'Error in training process.', 'error': True})
-        
-    #     from threading import Thread
-    #     thread = Thread(target=stream_process, args=(training_process,))
-    #     thread.start()
-
-    #     return jsonify({'message': 'Training started'})
-    # except Exception as e:
-    #     logger.exception("Failed to start training process.")
-    #     return jsonify({'message': 'error', 'error': str(e)})
-    
 @app.route('/stop_training', methods=['GET'])
 def stop_training():
     """
@@ -270,14 +265,13 @@ def stop_training():
     Returns:
         A JSON response containing the success message.
     """
-    global training_process
     try:
-        if training_process:
-            training_process.terminate()
-            training_process = None
+        was_running = training_process is not None and training_process.is_alive()
+        _terminate_training()
+        if was_running:
+            socketio.emit('training_progress', {'data': 'Training stopped by user.', 'stopped': True})
             return jsonify({'message': 'Training stopped'})
-        else:
-            return jsonify({'message': 'No training process to stop'})
+        return jsonify({'message': 'No training running'})
     except Exception as e:
         return jsonify({'message': 'error', 'error': str(e)})
     
@@ -367,10 +361,11 @@ def get_video():
             if not dataset or not video:
                 return jsonify({'message': 'error', 'error': 'Missing dataset or video parameter'}), 400
 
-        # Common path for both GET and POST
-        video_path = os.path.join('..', 'datasets', dataset, 'videos')
+        # Absolute path: send_from_directory resolves relative dirs against the app
+        # root (src/server), not the cwd (lac/), so build an absolute path here.
+        video_path = os.path.abspath(os.path.join('..', 'datasets', dataset, 'videos'))
 
-        if not os.path.exists(os.path.join(video_path, video)):
+        if not os.path.isfile(os.path.join(video_path, video)):
             return jsonify({'message': 'error', 'error': 'Video file not found'}), 404
 
         return send_from_directory(video_path, video, mimetype='video/mp4')
@@ -670,5 +665,5 @@ def detect_anomaly():
         return jsonify({'message': 'error', 'error': str(e)})
 
 if __name__ == '__main__':
-    # app.run(debug=True, port=5001)
-    socketio.run(app, debug=True, port=5001)
+    # use_reloader=False: reloader restarts kill in-flight training. Restart manually after edits.
+    socketio.run(app, debug=True, port=5001, use_reloader=False)
