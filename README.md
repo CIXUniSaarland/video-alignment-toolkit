@@ -62,9 +62,7 @@ npm start
 
 **4. Open the app** → <http://localhost:3000>
 
-The web app talks to the backend automatically — once both are running, you're ready to go.
-
-> Running on a remote machine over SSH? See [`start.md`](start.md) for tunneling instructions.
+The web app talks to the backend automatically. Once both are running, you're ready to go.
 
 ---
 
