@@ -72,16 +72,20 @@ function Home() {
                         <div className="col-6 col-md-4 position-relative">
                             <Link to="/va-api" className="menu-item" title="Start a training session">
                                 <i className="bi bi-play-circle-fill"></i>
-                                <h3 className="mt-3">Train Model <i className="bi bi-info-circle-fill tooltip-symbol"
-                                   data-bs-toggle="tooltip" data-bs-placement="top"></i></h3>
+                                <h3 className="mt-3">Train Model</h3>
                             </Link>
                         </div>
                         <div className="col-6 col-md-4 position-relative">
                             <Link to="/va-analysis" className="menu-item" title="Analyze Videos">
                                 <i className="bi bi-graph-up"></i>
-                                <h3 className="mt-3">Use Model <i className="bi bi-info-circle-fill tooltip-symbol"
-                                   data-bs-toggle="tooltip" data-bs-placement="top"></i></h3>
-                                
+                                <h3 className="mt-3">Use Model</h3>
+
+                            </Link>
+                        </div>
+                        <div className="col-6 col-md-4 position-relative">
+                            <Link to="/va-instruction" className="menu-item" title="Read the guide">
+                                <i className="bi bi-book-fill"></i>
+                                <h3 className="mt-3">Instructions</h3>
                             </Link>
                         </div>
                     </div>

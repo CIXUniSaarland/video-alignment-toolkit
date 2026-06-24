@@ -346,6 +346,12 @@ function AlignVideos() {
                             </div>
                         </div>
 
+                        {(!selectedDataset || !selectedFolder) && (
+                            <div className="alert alert-warning d-flex align-items-center py-2 mt-3 mb-0" style={{ fontSize: '0.88rem' }}>
+                                <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                Please select {[!selectedDataset && 'a dataset', !selectedFolder && 'a trained model'].filter(Boolean).join(' and ')} before continuing.
+                            </div>
+                        )}
                         <div className="d-flex justify-content-end mt-3">
                             <button
                                 className="btn btn-primary"

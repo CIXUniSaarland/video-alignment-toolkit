@@ -126,12 +126,11 @@ def anomaly_det(dataset, directory, video1, video2, device="cuda", name=""):
     # normalized_acc_cost_mat = acc_cost_mat / acc_cost_mat.max()
     # normalized_acc_cost_mat = [[float(f"{x:.3f}") for x in y] for y in normalized_acc_cost_mat.tolist()]
 
-    # Anomaly detection
+    # Per-aligned-frame distance between the two videos.
     distances = []
-    for pair in path.T:
-        x_idx1, x_idx2 = pair
-        distances.append(dist_fn(embs1[x_idx1], embs2[x_idx2]))
-    
+    for i, j in path.tolist():
+        distances.append(float(dist_fn(embs1[int(i)], embs2[int(j)])))
+
     distances = torch.tensor(distances)
     threshold = distances.mean() + 2 * distances.std()
     anomalous_frames = torch.where(distances > threshold)[0]
@@ -140,7 +139,9 @@ def anomaly_det(dataset, directory, video1, video2, device="cuda", name=""):
     data = {
         "distances": distances.tolist(),
         "threshold": threshold.item(),
-        "anomalous_frames": anomalous_frames.tolist()
+        "anomalous_frames": anomalous_frames.tolist(),
+        # [reference_frame, query_frame] for each aligned index, for frame preview.
+        "path": path.tolist()
     }
 
     return data

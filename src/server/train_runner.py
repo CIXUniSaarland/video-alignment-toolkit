@@ -4,6 +4,8 @@ import os
 import sys
 
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+# Reduce CUDA fragmentation (reserved-but-unallocated memory) across train/stop cycles.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 _SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.abspath(os.path.join(_SERVER_DIR, "..", ".."))

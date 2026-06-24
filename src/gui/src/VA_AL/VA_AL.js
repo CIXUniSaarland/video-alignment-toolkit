@@ -189,22 +189,19 @@ function VA_AL() {
                     <div className="col-md-4 position-relative">
                         <Link to="./align-vid" className="menu-item" title="Align videos using matrix operations">
                             <i className="bi bi-aspect-ratio"></i>
-                            <h4 className="mt-3">Align Videos <i className="bi bi-info-circle-fill tooltip-symbol"
-                            data-bs-toggle="tooltip" data-bs-placement="top"></i></h4>
+                            <h4 className="mt-3">Align Videos</h4>
                         </Link>
                     </div>
                     <div className="col-md-4 position-relative">
                         <Link to="./frame-retr" className="menu-item" title="Retrieve frames from videos">
                             <i className="bi bi-collection"></i>
-                            <h4 className="mt-3">Frame Retrieval <i className="bi bi-info-circle-fill tooltip-symbol"
-                            data-bs-toggle="tooltip" data-bs-placement="top"></i></h4>
+                            <h4 className="mt-3">Frame Retrieval</h4>
                         </Link>
                     </div>
                     <div className="col-md-4 position-relative">
                         <Link to="./anomaly-det" className="menu-item" title="Detect anomalies in data">
                             <i className="bi bi-exclamation-triangle-fill"></i>
-                            <h4 className="mt-3">Anomaly Detection <i className="bi bi-info-circle-fill tooltip-symbol"
-                            data-bs-toggle="tooltip" data-bs-placement="top"></i></h4>
+                            <h4 className="mt-3">Anomaly Detection</h4>
                         </Link>
                     </div>
                 </div>

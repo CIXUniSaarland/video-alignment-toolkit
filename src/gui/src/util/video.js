@@ -111,11 +111,18 @@ function VideoPlayerBookmark({ videoSrc, setCurrentFrameVideo, frameRate, bookma
         };
     }, [frameRate, setCurrentFrameVideo]);
 
+    // Reset bookmarks only when the video actually changes — not on remount (e.g.
+    // moving from step 2 to step 3 with the same video), which would wipe them.
+    const prevSrcRef = React.useRef(videoSrc);
     React.useEffect(() => {
-        if (videoSrc) {
-            setBookmarks([]);
-            setCurrentFrame(0);
+        if (prevSrcRef.current !== videoSrc) {
+            prevSrcRef.current = videoSrc;
+            if (videoSrc) {
+                setBookmarks([]);
+                setCurrentFrame(0);
+            }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [videoSrc]);
 
     const handlePlayPause = () => {
@@ -197,20 +204,24 @@ function VideoPlayerBookmark({ videoSrc, setCurrentFrameVideo, frameRate, bookma
                 </div>
                 <div className="time">{currentFrame} / {totalFrames}</div>
             </div>
-            <button onClick={() => openBookmarkModal()} className="btn btn-primary">Add Bookmark</button>
+            <button onClick={() => openBookmarkModal()} className="btn btn-primary btn-sm mt-2">
+                <i className="bi bi-bookmark-plus"></i> Add Bookmark
+            </button>
             <div className="bookmarks-list w-100">
+                {bookmarks.length === 0 && (
+                    <p className="bookmarks-empty">No bookmarks yet — play the video and add one to mark a moment.</p>
+                )}
                 {bookmarks.map((bookmark, index) => (
-                    <div key={index} className="row mt-1">
-                        <div className="col-md-10" onClick={() => handleBookmarkSelect(bookmark)}>
-                            {bookmark.title} - {bookmark.time}s ({bookmark.frame})
-                        </div>
-                        <div className="col-md-1">
-                            <button className="btn" onClick={() => openBookmarkModal(index)}>
+                    <div key={index} className="bookmark-row">
+                        <button className="bookmark-jump" onClick={() => handleBookmarkSelect(bookmark)} title="Jump to this moment">
+                            <span className="bookmark-title">{bookmark.title}</span>
+                            <span className="bookmark-time">{bookmark.time}s · frame {bookmark.frame}</span>
+                        </button>
+                        <div className="bookmark-actions">
+                            <button className="btn btn-sm" onClick={() => openBookmarkModal(index)} title="Edit">
                                 <i className="bi bi-pencil-square"></i>
                             </button>
-                        </div>
-                        <div className="col-md-1">
-                            <button className="btn" onClick={() => handleDeleteBookmark(index)}>
+                            <button className="btn btn-sm" onClick={() => handleDeleteBookmark(index)} title="Delete">
                                 <i className="bi bi-trash"></i>
                             </button>
                         </div>
@@ -241,7 +252,7 @@ function VideoPlayerBookmark({ videoSrc, setCurrentFrameVideo, frameRate, bookma
     );
 }
 
-function VideoPlayerBookmarkCard({ videoSrc, setCurrentFrameVideo, frameRate, bookmarks }) {
+function VideoPlayerBookmarkCard({ videoSrc, setCurrentFrameVideo, frameRate, bookmarks, seekFrame }) {
     const videoRef = React.useRef(null);
     const timelineRef = React.useRef(null);
     const [isPlaying, setIsPlaying] = React.useState(false);
@@ -279,6 +290,14 @@ function VideoPlayerBookmarkCard({ videoSrc, setCurrentFrameVideo, frameRate, bo
     useEffect(() => {
         setLocalBookmarks(bookmarks);
     }, [bookmarks]);
+
+    // Seek the player to a frame when asked (e.g. clicking a retrieved thumbnail).
+    useEffect(() => {
+        if (seekFrame && seekFrame.frame != null && videoRef.current && frameRate) {
+            videoRef.current.currentTime = seekFrame.frame / frameRate;
+            setCurrentFrame(seekFrame.frame);
+        }
+    }, [seekFrame, frameRate]);
 
     const handlePlayPause = () => {
         if (videoRef.current.paused) {

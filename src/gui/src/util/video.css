@@ -156,22 +156,60 @@ margin-top: 10px; /* Add some margin on top */
 }
 
 .bookmarks-list {
-margin-top: 10px;
+margin-top: 12px;
 }
 
-.bookmark-item {
-margin-bottom: 5px;
+.bookmarks-empty {
+font-size: 0.85rem;
+color: #999;
+margin: 0.4rem 0;
+}
+
+.bookmark-row {
 display: flex;
-justify-content: space-between;
 align-items: center;
+border: 1px solid #e0e0e0;
+border-radius: 8px;
+padding: 0.35rem 0.6rem;
+margin-bottom: 0.4rem;
+background: #fff;
 }
 
-.bookmark-item span {
-margin-right: 10px;
+.bookmark-jump {
+flex: 1;
+display: flex;
+flex-direction: column;
+align-items: flex-start;
+text-align: left;
+background: none;
+border: none;
+padding: 0;
+margin: 0;
+cursor: pointer;
 }
 
-.bookmark-item button {
-margin-left: 5px;
+.bookmark-title {
+font-weight: 600;
+color: #2D3047;
+}
+
+.bookmark-time {
+font-size: 0.78rem;
+color: #6b7a77;
+}
+
+.bookmark-actions {
+display: flex;
+gap: 0.15rem;
+}
+
+.bookmark-actions .btn {
+color: #6b7a77 !important;
+padding: 0.2rem 0.45rem;
+}
+
+.bookmark-actions .btn:hover {
+color: #F78F26 !important;
 }
 
 .bmModal {

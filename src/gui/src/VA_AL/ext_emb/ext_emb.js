@@ -134,7 +134,7 @@ function ExtractEmbeddings() {
     }
 
     return (
-        <div className="w-100">
+        <div className="w-100 ext-emb">
             <Breadcrumbs breadcrumbs={breadcrumbItems} />
             <h2 className="mb-3">VAT Analysis: Extract Embeddings</h2>
             <div className="row">

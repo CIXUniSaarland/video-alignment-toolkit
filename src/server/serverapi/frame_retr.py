@@ -76,12 +76,17 @@ def frame_retr(dataset, directory, video1, queryframe1, video2, device="cuda", n
         dist = torch.sum((x - y) ** 2)
         return dist
 
-    # if the data file already exists, return it
+    # Use the cached alignment path if available and valid.
+    cached = None
     if os.path.exists(output_path):
-        logger.info(f"Data file already exists at {output_path}")
-        data = json.load(open(output_path))
-        path = data['path']
+        try:
+            cached = json.load(open(output_path))
+        except Exception:
+            logger.warning(f"Corrupt cache at {output_path}; recomputing.")
+            cached = None
 
+    if cached is not None:
+        path = cached['path']
     else:
         model = model_dict[cfg.arch.type](cfg)
         model, _, _ = load_ckpt(cfg, model, None)
@@ -126,7 +131,7 @@ def frame_retr(dataset, directory, video1, queryframe1, video2, device="cuda", n
         # normalized_acc_cost_mat = acc_cost_mat / acc_cost_mat.max()
         # normalized_acc_cost_mat = [[float(f"{x:.3f}") for x in y] for y in normalized_acc_cost_mat.tolist()]
 
-        path = path.T.tolist()
+        path = path.tolist()
 
         data = {
             "v1": video1_name,
@@ -134,22 +139,29 @@ def frame_retr(dataset, directory, video1, queryframe1, video2, device="cuda", n
             "path": path,
             # "acc_cost_mat": normalized_acc_cost_mat,
             "acc_cost_mat": None,
-            "dtw_cost": d
+            "dtw_cost": float(d)
         }
 
         with open(output_path, 'w') as f:
             json.dump(data, f)
             logger.success(f"Data saved to {output_path}")
     
+    # Normalize the path to a list of [query_frame, ref_frame] pairs (handles old
+    # caches that stored it transposed as 2 x N).
+    parr = np.array(path)
+    if parr.ndim == 2 and parr.shape[0] == 2 and parr.shape[1] > 2:
+        parr = parr.T
+    pairs = parr.astype(int).tolist()
+
+    # For each query (bookmark) frame, find the aligned frame in the reference video.
     closest_frames = []
-    path_ = torch.tensor(path)
-    for i in range(len(path)):
-        if path[i][0] == queryframe1[0]:
-            closest_frames.append(path[i][1])
-            queryframe1.pop(0)
-        if len(queryframe1) == 0:
-            break
-    logger.info(f"Closest frames: {closest_frames}")
+    for qf in queryframe1:
+        qf = int(qf)
+        matched = next((r for q, r in pairs if q == qf), None)
+        if matched is None:  # query frame not exactly on the path -> nearest one
+            matched = min(pairs, key=lambda p: abs(p[0] - qf))[1]
+        closest_frames.append(int(matched))
+    logger.info(f"Query frames {queryframe1} -> closest frames {closest_frames}")
     result = {
         'closest_frames': closest_frames,
     }

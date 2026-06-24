@@ -72,7 +72,11 @@ def align(dataset, directory, video1, video2, device="cuda", name=""):
 
     # if the data file already exists (and has a cost matrix), return it
     if os.path.exists(output_path):
-        data = json.load(open(output_path))
+        try:
+            data = json.load(open(output_path))
+        except Exception:
+            logger.warning(f"Corrupt cache at {output_path}; recomputing.")
+            data = {}
         if data.get("acc_cost_mat") is not None:
             logger.info(f"Data file already exists at {output_path}")
             return data

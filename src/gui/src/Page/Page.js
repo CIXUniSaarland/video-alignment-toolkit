@@ -5,8 +5,16 @@ import { NavLink } from 'react-router-dom';
 
 function Footer() {
     return (
-        <footer style={{ textAlign: 'center', padding: '10px 0', width: '100%' }}>
-            <p>&copy;</p>
+        <footer className="vat-footer">
+            <div className="vat-footer-title">
+                VideoAlign: A Toolkit to Make Video Analysis Accessible to HCI Practitioners
+            </div>
+            <div className="vat-footer-authors">
+                João Marcelo Evangelista Belo · Keyne Oei · Anna Maria Feit
+            </div>
+            <div className="vat-footer-venue">
+                PACM HCI (EICS) 2026 · Computational Interaction Lab, Saarland University
+            </div>
         </footer>
     );
 }
