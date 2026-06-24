@@ -1,4 +1,22 @@
-/datasets
-/lac/saved/
+# Datasets (user-provided, large)
+/datasets/
 
+# Training outputs: checkpoints, logs, embeddings, alignment caches
+/train-results/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Node (frontend deps; also ignored by src/gui/.gitignore)
+node_modules/
+src/gui/node_modules/
+src/gui/build/
+
+# OS / editor
 .DS_Store
+Thumbs.db
+.vscode/
+.idea/
