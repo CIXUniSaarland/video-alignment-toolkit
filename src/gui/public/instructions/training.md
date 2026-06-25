@@ -17,6 +17,10 @@ There are **two ways** to provide a dataset:
 The video files in the chosen dataset are listed on the right. For good results, use
 **at least 25 videos** of the same process; the toolkit warns you if there are fewer.
 
+> **Jester (hand gestures)** is supported as a built-in dataset, but it downloads as folders
+> of JPEG frames, not mp4s. Convert it once with the helper in the repo's `jester/` folder, then
+> select the `jester` dataset here and the `jester/lac.json` configuration in Step 2.
+
 ![Step 1 — select a dataset](/instructions/train-1.png)
 
 ---

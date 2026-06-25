@@ -88,7 +88,13 @@ For Analysis (Align, Frame Retrieval, Anomaly), only the `videos/*.mp4` files ar
 
 Example datasets:
 [Pouring](https://drive.google.com/file/d/14xjBRqx2xtyO0rXU2RVYGdFxyWS_Qkv5/view) ·
-[PennAction](https://drive.google.com/file/d/1lcqHYciO68M7LVniJuZ5oOr6hsOuOPuT/view)
+[PennAction](https://drive.google.com/file/d/1lcqHYciO68M7LVniJuZ5oOr6hsOuOPuT/view) ·
+[Jester](https://www.qualcomm.com/developer/software/jester-dataset) (hand gestures)
+
+**Jester** is supported as a built-in `Jester` dataset type, but it ships as per-clip folders of
+JPEG frames rather than mp4s. Convert it first with the helper in [`jester/`](jester/) where it encodes
+one gesture into `datasets/jester/videos/*.mp4`, after which you train it like any other dataset
+(select it in the GUI with the `jester/lac.json` config). See [`jester/README.md`](jester/README.md).
 
 ---
 
