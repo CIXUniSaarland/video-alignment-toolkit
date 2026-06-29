@@ -1,0 +1,27 @@
+# Core ML
+torch==2.2.1
+torchvision==0.17.1
+numpy==1.23.1
+scipy
+scikit-learn
+pandas
+numba
+
+# Video / image
+av
+opencv-python
+pillow
+matplotlib
+
+# Web API
+Flask
+flask-cors
+flask-socketio
+
+# Training & utils
+tensorboard       # torch.utils.tensorboard.SummaryWriter needs it
+torchinfo
+fastdtw
+easydict
+loguru
+tqdm

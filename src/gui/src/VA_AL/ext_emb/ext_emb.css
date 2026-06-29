@@ -1,0 +1,13 @@
+/* Scoped to the Extract-Embeddings page so these don't leak to every .row input
+   across the app (which made other inputs' text white-on-white). */
+.ext-emb .row input {
+    padding: 0.2rem 0 0.2rem 0.5rem;
+    background-color: unset;
+}
+
+.ext-emb .row input:focus {
+    padding: 0.2rem 0 0.2rem 0.5rem;
+    background-color: unset;
+    border-color: #F78F26;
+    box-shadow: none;
+}
